@@ -125,6 +125,21 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const handleReClockIn = async () => {
+    if (!window.confirm('Resume active shift? This will cancel your previous clock-out and return you to actively working.')) {
+      return;
+    }
+    setClockActionLoading(true);
+    try {
+      await api.post('/attendance/re-clock-in', {});
+      await fetchEmployeeDashboard();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to re-clock in');
+    } finally {
+      setClockActionLoading(false);
+    }
+  };
+
   const handleToggleBreak = async () => {
     setClockActionLoading(true);
     const hasOpenBreak = employeeData?.today_record?.has_open_break;
@@ -314,9 +329,20 @@ export const Dashboard: React.FC = () => {
             )}
 
             {isClockedOut && (
-              <div className="px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-semibold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span>Completed for Today</span>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>Completed for Today</span>
+                </div>
+                <button
+                  onClick={handleReClockIn}
+                  disabled={clockActionLoading}
+                  className="px-4 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs flex items-center gap-2 shadow-lg transition-all transform active:scale-95 disabled:opacity-50 cursor-pointer"
+                  title="If you clocked out mistakenly, resume your active shift"
+                >
+                  <RefreshCw className={`w-4 h-4 ${clockActionLoading ? 'animate-spin' : ''}`} />
+                  <span>Re-Clock In (Resume Shift)</span>
+                </button>
               </div>
             )}
           </div>

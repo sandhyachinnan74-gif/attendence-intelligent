@@ -68,7 +68,7 @@ class AttendanceService:
 
     @staticmethod
     async def clock_in(db: AsyncSession, organization_id: str, employee_id: str, custom_time: Optional[datetime] = None) -> AttendanceRecord:
-        now = custom_time or datetime.now(timezone.utc).replace(tzinfo=None)
+        now = custom_time or datetime.now()
         today = now.date()
 
         # Check existing record for today
@@ -79,8 +79,8 @@ class AttendanceService:
             )
         )
         existing = (await db.execute(stmt)).scalars().first()
-        if existing and existing.clock_in is not None:
-            raise ConflictException(f"Employee {employee_id} has already clocked in today at {existing.clock_in}")
+        if existing and existing.clock_in is not None and existing.clock_out is None:
+            raise ConflictException(f"Employee {employee_id} is already clocked in today at {existing.clock_in.strftime('%H:%M:%S')}")
 
         shift = await AttendanceService.get_active_shift(db, employee_id, today)
         worked, ot, late, status = AttendanceService.calculate_shift_metrics(now, None, shift)
@@ -102,6 +102,7 @@ class AttendanceService:
         else:
             record = existing
             record.clock_in = now
+            record.clock_out = None
             record.late_minutes = late
             record.status = status
 
@@ -111,7 +112,7 @@ class AttendanceService:
 
     @staticmethod
     async def clock_out(db: AsyncSession, organization_id: str, employee_id: str, custom_time: Optional[datetime] = None) -> AttendanceRecord:
-        now = custom_time or datetime.now(timezone.utc).replace(tzinfo=None)
+        now = custom_time or datetime.now()
         today = now.date()
 
         stmt = select(AttendanceRecord).where(
@@ -124,7 +125,7 @@ class AttendanceService:
         if not record or not record.clock_in:
             raise ValidationException(f"No active clock-in found for employee {employee_id} on {today}")
         if record.clock_out is not None:
-            raise ConflictException(f"Employee has already clocked out at {record.clock_out}")
+            raise ConflictException(f"Employee has already clocked out at {record.clock_out.strftime('%H:%M:%S')}")
 
         # Ensure ongoing breaks are closed
         break_stmt = select(AttendanceBreak).where(
@@ -159,8 +160,62 @@ class AttendanceService:
         return record
 
     @staticmethod
+    async def re_clock_in(
+        db: AsyncSession,
+        organization_id: str,
+        employee_id: str,
+        reason: str = "Mistaken clock-out"
+    ) -> AttendanceRecord:
+        now = datetime.now()
+        today = now.date()
+
+        stmt = select(AttendanceRecord).where(
+            and_(
+                AttendanceRecord.employee_id == employee_id,
+                AttendanceRecord.date == today
+            )
+        )
+        record = (await db.execute(stmt)).scalars().first()
+        if not record or not record.clock_in:
+            raise ValidationException(f"No attendance record found for today ({today}). Please clock in first.")
+        if record.clock_out is None:
+            raise ValidationException("Employee is already actively clocked in; no need to re-clock in.")
+
+        previous_out = record.clock_out
+        record.clock_out = None
+
+        shift = await AttendanceService.get_active_shift(db, employee_id, today)
+        all_breaks_stmt = select(AttendanceBreak).where(AttendanceBreak.attendance_record_id == record.id)
+        all_breaks = (await db.execute(all_breaks_stmt)).scalars().all()
+        total_breaks = sum(b.duration_minutes for b in all_breaks)
+
+        worked, ot, late, status = AttendanceService.calculate_shift_metrics(
+            record.clock_in, None, shift, total_break_minutes=total_breaks
+        )
+        record.worked_minutes = worked
+        record.overtime_minutes = ot
+        record.late_minutes = late
+        record.status = status
+        record.is_corrected = True
+
+        history = AttendanceCorrectionHistory(
+            attendance_record_id=record.id,
+            corrected_by=employee_id,
+            previous_clock_in=record.clock_in,
+            new_clock_in=record.clock_in,
+            previous_clock_out=previous_out,
+            new_clock_out=None,
+            reason=reason
+        )
+        db.add(history)
+
+        await db.commit()
+        await db.refresh(record)
+        return record
+
+    @staticmethod
     async def toggle_break(db: AsyncSession, organization_id: str, employee_id: str, reason: str = "Normal Break") -> AttendanceBreak:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now()
         today = now.date()
 
         stmt = select(AttendanceRecord).where(

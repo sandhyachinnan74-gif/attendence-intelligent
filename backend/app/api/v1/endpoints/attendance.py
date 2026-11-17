@@ -103,6 +103,56 @@ async def clock_out(
         ]
     }
 
+@router.post("/re-clock-in", response_model=AttendanceResponse)
+@router.post("/resume-shift", response_model=AttendanceResponse)
+async def re_clock_in(
+    req: Optional[ClockInRequest] = None,
+    user: User = Depends(get_current_user),
+    employee: Optional[Employee] = Depends(get_current_employee_profile),
+    db: AsyncSession = Depends(get_db)
+):
+    target_emp_id = None
+    if user.role in ["admin", "hr_manager"] and req and req.employee_id:
+        target_emp_id = req.employee_id
+    elif employee:
+        target_emp_id = employee.id
+    else:
+        raise ValidationException("No employee profile found for re-clock in")
+
+    record = await AttendanceService.re_clock_in(db, user.organization_id, target_emp_id)
+
+    emp = (await db.execute(select(Employee).where(Employee.id == target_emp_id))).scalars().first()
+    dept = (await db.execute(select(Department).where(Department.id == emp.department_id))).scalars().first() if emp and emp.department_id else None
+    breaks = (await db.execute(select(AttendanceBreak).where(AttendanceBreak.attendance_record_id == record.id))).scalars().all()
+
+    return {
+        "id": record.id,
+        "organization_id": record.organization_id,
+        "employee_id": record.employee_id,
+        "date": record.date,
+        "clock_in": record.clock_in,
+        "clock_out": record.clock_out,
+        "worked_minutes": record.worked_minutes,
+        "overtime_minutes": record.overtime_minutes,
+        "late_minutes": record.late_minutes,
+        "status": record.status,
+        "is_corrected": record.is_corrected,
+        "created_at": record.created_at,
+        "employee_name": f"{emp.first_name} {emp.last_name}" if emp else None,
+        "employee_code": emp.employee_code if emp else None,
+        "department_name": dept.name if dept else "General",
+        "breaks": [
+            {
+                "id": b.id,
+                "break_start": b.break_start,
+                "break_end": b.break_end,
+                "duration_minutes": b.duration_minutes,
+                "reason": b.reason
+            }
+            for b in breaks
+        ]
+    }
+
 @router.post("/break", response_model=BreakResponse)
 async def toggle_break(
     req: BreakRequest,

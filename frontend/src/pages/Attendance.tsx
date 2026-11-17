@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   Edit,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { AttendanceRecord } from '../types';
@@ -90,6 +91,22 @@ export const Attendance: React.FC = () => {
       await fetchRecords();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Failed to clock out');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReClockIn = async () => {
+    if (!window.confirm('Resume active shift? This will cancel your previous clock-out.')) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await api.post('/attendance/re-clock-in', {});
+      await fetchTodayStatus();
+      await fetchRecords();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to re-clock in');
     } finally {
       setActionLoading(false);
     }
@@ -230,8 +247,19 @@ export const Attendance: React.FC = () => {
           )}
 
           {isClockedOut && (
-            <div className="px-4 py-2 rounded-lg bg-slate-50 border border-border text-xs text-secondary font-medium">
-              Daily shift completed ({Math.round((todayRecord.worked_minutes / 60) * 10) / 10} hours worked).
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="px-4 py-2 rounded-lg bg-slate-50 border border-border text-xs text-secondary font-medium">
+                Daily shift completed ({Math.round((todayRecord.worked_minutes / 60) * 10) / 10} hours worked).
+              </div>
+              <button
+                onClick={handleReClockIn}
+                disabled={actionLoading}
+                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+                title="If you clocked out mistakenly, resume active shift"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? 'animate-spin' : ''}`} />
+                <span>Re-Clock In</span>
+              </button>
             </div>
           )}
         </div>
