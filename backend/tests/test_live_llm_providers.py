@@ -63,3 +63,27 @@ async def test_live_orchestrator_turn_with_nvidia():
         assert len(result["content"]) > 10
         assert result["provider"] == "nvidia"
         assert result["model"] == "mistralai/mistral-large-4-1t-a52b"
+
+@pytest.mark.asyncio
+async def test_live_groq_fallback_when_primary_fails():
+    from app.core.config import settings
+    original_key = settings.NVIDIA_API_KEY
+    try:
+        settings.NVIDIA_API_KEY = "invalid_key_to_force_fallback"
+        sessionmaker = get_sessionmaker()
+        async with sessionmaker() as db:
+            user = (await db.execute(select(User).where(User.email == "admin@attendai.com"))).scalars().first()
+            assert user is not None
+            result = await ai_orchestrator.execute_turn(
+                db=db,
+                user=user,
+                employee=None,
+                user_message="Hello, reply with OK for fallback test.",
+                conversation_history=[]
+            )
+            assert result["fallback_used"] is True
+            assert result["provider"] == "groq"
+            assert result["model"] == "openai/gpt-oss-120b"
+            assert len(result["content"]) > 0
+    finally:
+        settings.NVIDIA_API_KEY = original_key

@@ -31,6 +31,54 @@ class AIOrchestrator:
         else:
             return MockLLMProvider()
 
+    def get_providers_chain(self) -> List[BaseLLMProvider]:
+        chain: List[BaseLLMProvider] = []
+        primary = settings.LLM_PROVIDER.lower()
+
+        # Add primary provider first if configured
+        if primary == "nvidia" and settings.NVIDIA_API_KEY:
+            chain.append(NvidiaNIMProvider())
+        elif primary == "groq" and settings.GROQ_API_KEY:
+            chain.append(GroqProvider())
+        elif primary == "gemini" and settings.GEMINI_API_KEY:
+            chain.append(GeminiProvider())
+
+        # Add fallback providers
+        if settings.GROQ_API_KEY and not any(isinstance(p, GroqProvider) for p in chain):
+            chain.append(GroqProvider())
+        if settings.NVIDIA_API_KEY and not any(isinstance(p, NvidiaNIMProvider) for p in chain):
+            chain.append(NvidiaNIMProvider())
+
+        # Ultimate offline fallback
+        chain.append(MockLLMProvider())
+        return chain
+
+    async def generate_with_fallback(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        override_provider: Optional[BaseLLMProvider] = None
+    ) -> tuple[Dict[str, Any], BaseLLMProvider, bool]:
+        if override_provider:
+            resp = await override_provider.generate_response(messages=messages, tools=tools)
+            return resp, override_provider, False
+
+        providers = self.get_providers_chain()
+        for i, provider in enumerate(providers):
+            try:
+                resp = await provider.generate_response(messages=messages, tools=tools)
+                return resp, provider, (i > 0)
+            except Exception as e:
+                logger.warning(
+                    f"LLM Provider '{type(provider).__name__}' failed: {e}. "
+                    f"Attempting fallback to next provider in chain."
+                )
+                continue
+
+        mock = MockLLMProvider()
+        resp = await mock.generate_response(messages=messages, tools=tools)
+        return resp, mock, True
+
     async def execute_turn(
         self,
         db: AsyncSession,
@@ -72,10 +120,11 @@ class AIOrchestrator:
         # 3. Filter permitted tools
         allowed_tools = HarnessPermissions.filter_tools_for_user(user.role, TOOL_DEFINITIONS)
 
-        provider = self.get_provider()
-        
-        # 4. First LLM call
-        first_resp = await provider.generate_response(messages=messages, tools=allowed_tools if allowed_tools else None)
+        # 4. First LLM call with resilient multi-provider failover
+        first_resp, active_provider, fallback_used = await self.generate_with_fallback(
+            messages=messages,
+            tools=allowed_tools if allowed_tools else None
+        )
 
         tool_calls = first_resp.get("tool_calls")
         tool_results = []
@@ -134,7 +183,12 @@ class AIOrchestrator:
                     "content": json.dumps(tr["output"])
                 })
 
-            second_resp = await provider.generate_response(messages=messages)
+            try:
+                second_resp = await active_provider.generate_response(messages=messages)
+            except Exception as e:
+                logger.warning(f"Second turn with {type(active_provider).__name__} failed: {e}. Falling back.")
+                second_resp, _, _ = await self.generate_with_fallback(messages=messages)
+
             final_content = second_resp.get("content") or first_resp.get("content") or ""
         else:
             final_content = first_resp.get("content") or ""
@@ -150,6 +204,7 @@ class AIOrchestrator:
             "citations": validated["citations"],
             "model": first_resp.get("model", "default"),
             "provider": first_resp.get("provider", "default"),
+            "fallback_used": fallback_used,
             "latency_ms": first_resp.get("latency_ms", 0)
         }
 
