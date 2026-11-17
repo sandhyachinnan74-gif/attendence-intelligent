@@ -17,6 +17,7 @@ import { api } from '../services/api';
 import { AttendanceRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LiveClock } from '../components/common/LiveClock';
+import { downloadFile } from '../utils/download';
 
 export const Attendance: React.FC = () => {
   const { user } = useAuth();
@@ -138,22 +139,20 @@ export const Attendance: React.FC = () => {
           <p className="text-xs text-secondary mt-0.5">Punch tracking, worked hours, breaks and audit records.</p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href="/api/v1/exports/attendance/csv"
-            download
-            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm"
+          <button
+            onClick={() => downloadFile(`/exports/attendance/csv${startDate ? `?start_date=${startDate}` : ''}${endDate ? `&end_date=${endDate}` : ''}`, 'attendai_attendance.csv')}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-secondary" />
             <span>CSV Export</span>
-          </a>
-          <a
-            href="/api/v1/exports/attendance/xlsx"
-            download
-            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm"
+          </button>
+          <button
+            onClick={() => downloadFile(`/exports/attendance/xlsx${startDate ? `?start_date=${startDate}` : ''}${endDate ? `&end_date=${endDate}` : ''}`, 'attendai_attendance.xlsx')}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
             <span>XLSX Export</span>
-          </a>
+          </button>
         </div>
       </div>
 

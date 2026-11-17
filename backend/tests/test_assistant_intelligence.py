@@ -279,3 +279,4 @@ def test_output_validator_eliminates_raw_json():
     assert len(result["citations"]) > 0
     # Verify follow-ups
     assert len(result["follow_ups"]) > 0
+

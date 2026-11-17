@@ -36,6 +36,7 @@ import { DashboardData, AttendanceRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { LiveClock } from '../components/common/LiveClock';
+import { downloadFile } from '../utils/download';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -394,14 +395,13 @@ export const Dashboard: React.FC = () => {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-primary' : 'text-secondary'}`} />
             <span>Refresh</span>
           </button>
-          <a
-            href="/api/v1/exports/attendance/csv"
-            download
-            className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover flex items-center gap-1.5 transition-colors shadow-sm"
+          <button
+            onClick={() => downloadFile('/exports/attendance/csv', 'attendai_attendance.csv')}
+            className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export CSV</span>
-          </a>
+          </button>
         </div>
       </div>
 

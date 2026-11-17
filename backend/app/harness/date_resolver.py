@@ -1,10 +1,11 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, time
 from typing import Tuple, Optional
+import re
 
 class DateRangeResolver:
     """
-    Deterministic resolver for natural-language workforce time periods.
-    Ensures consistent, verifiable date windows across all backend tools.
+    Deterministic resolver for natural-language workforce time periods and timestamps.
+    Ensures consistent, verifiable date windows and threshold parameters across all backend tools.
     """
     @staticmethod
     def resolve_period(
@@ -53,7 +54,6 @@ class DateRangeResolver:
             return start, today, f"{today.strftime('%B %Y')} (Month-to-Date)"
 
         elif p in ["last_month", "previous_month"]:
-            # First and last day of previous month
             first_this_month = date(today.year, today.month, 1)
             last_prev_month = first_this_month - timedelta(days=1)
             first_prev_month = date(last_prev_month.year, last_prev_month.month, 1)
@@ -65,8 +65,63 @@ class DateRangeResolver:
         elif p in ["last_30_days", "past_30_days"]:
             return today - timedelta(days=30), today, "Last 30 Days"
 
-        elif p in ["last_90_days", "quarter"]:
+        elif p in ["last_90_days", "past_90_days"]:
             return today - timedelta(days=90), today, "Last 90 Days"
+
+        elif p in ["previous_quarter", "last_quarter"]:
+            # Quarters: Q1 (1-3), Q2 (4-6), Q3 (7-9), Q4 (10-12)
+            cur_quarter = (today.month - 1) // 3 + 1
+            if cur_quarter == 1:
+                prev_q_year = today.year - 1
+                return date(prev_q_year, 10, 1), date(prev_q_year, 12, 31), f"Q4 {prev_q_year}"
+            elif cur_quarter == 2:
+                return date(today.year, 1, 1), date(today.year, 3, 31), f"Q1 {today.year}"
+            elif cur_quarter == 3:
+                return date(today.year, 4, 1), date(today.year, 6, 30), f"Q2 {today.year}"
+            else:  # cur_quarter == 4
+                return date(today.year, 7, 1), date(today.year, 9, 30), f"Q3 {today.year}"
+
+        elif p in ["this_quarter", "current_quarter"]:
+            cur_quarter = (today.month - 1) // 3 + 1
+            q_start_month = (cur_quarter - 1) * 3 + 1
+            return date(today.year, q_start_month, 1), today, f"Q{cur_quarter} {today.year} (Quarter-to-Date)"
+
+        elif p in ["this_year", "current_year", "year_to_date", "ytd"]:
+            return date(today.year, 1, 1), today, f"{today.year} Year-to-Date"
+
+        elif p in ["last_year", "previous_year"]:
+            prev_year = today.year - 1
+            return date(prev_year, 1, 1), date(prev_year, 12, 31), f"Calendar Year {prev_year}"
 
         # Default fallback: last 30 days
         return today - timedelta(days=30), today, "Last 30 Days"
+
+    @staticmethod
+    def parse_time_str(time_str: Optional[str]) -> Optional[time]:
+        """Parses time strings like '11:00', '11:00:00', '11am', '2pm', '14:30'."""
+        if not time_str:
+            return None
+        t_clean = time_str.strip().lower()
+        # Format HH:MM:SS
+        m = re.match(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$', t_clean)
+        if m:
+            h, minute = int(m.group(1)), int(m.group(2))
+            sec = int(m.group(3)) if m.group(3) else 0
+            return time(h, minute, sec)
+        # Format with am/pm (e.g. 11am, 11:30am, 2pm)
+        m = re.match(r'^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$', t_clean)
+        if m:
+            h = int(m.group(1))
+            minute = int(m.group(2)) if m.group(2) else 0
+            ampm = m.group(3)
+            if ampm == "pm" and h < 12:
+                h += 12
+            elif ampm == "am" and h == 12:
+                h = 0
+            return time(h, minute, 0)
+        # Simple integer hour (e.g. '11')
+        if t_clean.isdigit():
+            h = int(t_clean)
+            if 0 <= h <= 23:
+                return time(h, 0, 0)
+        return None

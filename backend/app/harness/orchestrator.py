@@ -117,19 +117,22 @@ class AIOrchestrator:
         if user.role == "admin":
             scope_instructions = (
                 "You have organization-wide administrative scope. You can analyze any department, "
-                "compare cross-department trends, highlight anomaly investigation records, and provide executive workforce insights."
+                "compare cross-department trends, inspect clock-in timings, query overtime, evaluate long breaks, "
+                "track missing clock-outs, analyze leave patterns, and investigate anomaly flags."
             )
         elif user.role == "hr_manager":
             scope_instructions = (
                 "You have HR Manager scope. You can analyze workforce attendance, overtime, absenteeism, "
-                "investigate anomalies, and review department-level patterns and policy compliance."
+                "compare department metrics, analyze leave trends, investigate anomalies, and review policy compliance."
             )
         else:  # employee
             emp_name = f"{employee.first_name} {employee.last_name}" if employee else user.email
             scope_instructions = (
                 f"You have personal Employee scope for '{emp_name}'. "
-                "You can only access personal attendance records, personal hours, personal overtime, and general company HR policies. "
-                "Never access, reveal, or attempt to query private records of other colleagues."
+                "You can access your personal attendance records, personal overtime, personal late arrivals, "
+                "personal working hours, leave balances, assigned shift schedule, and company HR policies. "
+                "Under NO circumstances should you access, reveal, or attempt to query records of other colleagues or organizational summaries. "
+                "Always use 'get_my_*' personal tools for personal questions."
             )
 
         system_prompt = (
@@ -137,21 +140,25 @@ class AIOrchestrator:
             f"Authenticated User: '{user.email}' | Role: '{role_label}'.\n"
             f"Scope: {scope_instructions}\n\n"
             "CRITICAL OPERATIONAL & PRESENTATION GUIDELINES:\n"
-            "1. CONVERSATIONAL MEMORY & REFERENCES: Maintain continuity across follow-up turns. "
-            "If the user asks 'What about Engineering?' or 'Who had the most overtime last month?' followed by 'Show their details', "
-            "inherit the previous time period, metric, and target entity from the conversation history.\n"
-            "2. EXACT QUERY INTERPRETATION: Respect exact numerical and date conditions: "
-            "'more than 5' means count >= 6; 'at least 3' means count >= 3. Never substitute a 7-day query for a monthly query.\n"
-            "3. MULTI-STEP REASONING: When a query requires multiple tools (e.g. comparing departments or finding compound patterns), "
-            "invoke the necessary approved tools across steps, combine the results, and explain the conclusions.\n"
-            "4. NEVER OUTPUT RAW JSON: Under NO circumstances should you output raw JSON strings, Python dictionaries, curly braces "
-            "with database field names, or technical execution traces to the user.\n"
-            "5. POLISHED ENTERPRISE FORMATTING:\n"
+            "1. UNIVERSAL QUERY UNDERSTANDING: Understand arbitrary, previously unseen natural-language workforce inquiries. "
+            "Dynamically interpret intents regarding employee profiles, attendance, punctuality, clock-in times (e.g. after 11), "
+            "worked hours (e.g. > 45 hrs), break durations, weekend overtime, shift patterns, leave balances, department comparisons, and policy rules.\n"
+            "2. ROLE-BASED TOOL SELECTION:\n"
+            "   - If role is 'employee', ALWAYS select 'get_my_*' tools for personal attendance, overtime, hours, leave balances, and shifts. Never attempt org-wide tools.\n"
+            "   - If role is 'admin' or 'hr_manager', select universal query tools ('query_workforce_attendance', 'compare_workforce_metrics', 'query_leave_analytics', etc.) as appropriate.\n"
+            "3. EXACT NUMERICAL & DATE CONDITIONS:\n"
+            "   - 'more than 5' means > 5 (count >= 6).\n"
+            "   - 'at least 3' means >= 3.\n"
+            "   - 'more than 45 hours' means worked_hours >= 45.0.\n"
+            "   - Respect exact time periods: 'previous quarter', 'this year', 'today', 'last month'. Never substitute a 7-day query for a monthly/quarterly query.\n"
+            "4. MULTI-STEP REASONING: When an inquiry requires comparisons or compound criteria (e.g. comparing two lowest departments, or finding departments with increasing absenteeism), invoke the appropriate tools, compare metrics, and cite evidence.\n"
+            "5. NEVER OUTPUT RAW JSON: Under NO circumstances should you output raw JSON, Python dictionaries, or technical traces to the user.\n"
+            "6. POLISHED ENTERPRISE FORMATTING:\n"
             "   - Synthesize all data into clean Markdown tables with bold column headers.\n"
             "   - Include highlighted KPI metrics, bulleted summaries, and bold percentages.\n"
-            "   - Include an '### AI Insight' section highlighting key trends, anomalies, or root causes strictly grounded in evidence.\n"
-            "   - Include actionable HR / management recommendations where appropriate.\n"
-            "   - Ground all factual statements in verified tool outputs. Never fabricate employees, dates, or metrics."
+            "   - Include an '### AI Insight' or '### Key Observation' section grounded in verified database evidence.\n"
+            "   - Ground all factual statements in verified tool outputs. Never fabricate employees, dates, or metrics.\n"
+            "7. ERROR & SCOPE BOUNDARIES: If an operation is denied or fails, explain the permission boundary clearly and courteously without claiming data was retrieved."
         )
 
         messages = [{"role": "system", "content": system_prompt}]
@@ -251,10 +258,25 @@ class AIOrchestrator:
                     "content": json.dumps(tr["output"])
                 })
 
-            # Prompt model to synthesize the verified tool results into a polished enterprise markdown response
+            # Prompt model to synthesize the tool results into a polished enterprise markdown response
+            has_error = any("error" in tr.get("output", {}) for tr in all_tool_results)
+            if has_error:
+                synthesis_instruction = (
+                    "Please respond to the user based on the tool results above. "
+                    "NOTICE: A requested operation encountered an authorization or validation error. "
+                    "Politely and clearly explain the restriction or error to the user based on their role permissions. "
+                    "Do NOT claim that data was retrieved or that all metrics were verified when a tool returned an error. "
+                    "Do not output raw JSON."
+                )
+            else:
+                synthesis_instruction = (
+                    "Please synthesize the above verified database records into a polished enterprise markdown response "
+                    "with clean markdown tables, bullet points, key observations, and actionable insights. Do not output raw JSON."
+                )
+
             messages.append({
                 "role": "user",
-                "content": "Please synthesize the above verified database records into a polished enterprise markdown response with clean markdown tables, bullet points, key observations, and actionable insights. Do not output raw JSON."
+                "content": synthesis_instruction
             })
             final_resp, prov, fb = await self.generate_with_fallback(messages=messages, tools=None)
             if fb:
