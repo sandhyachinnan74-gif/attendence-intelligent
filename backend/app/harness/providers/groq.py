@@ -34,6 +34,10 @@ class GroqProvider(BaseLLMProvider):
 
         async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
+            if resp.status_code == 429:
+                import asyncio
+                await asyncio.sleep(2.0)
+                resp = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
 

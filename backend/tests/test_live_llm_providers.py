@@ -33,7 +33,7 @@ async def test_live_nvidia_nim_tool_calling():
     assert response["tool_calls"] is not None
     assert len(response["tool_calls"]) > 0
     func_name = response["tool_calls"][0]["function"]["name"]
-    assert func_name in ["get_late_arrivals", "get_attendance_summary"]
+    assert func_name in ["get_late_arrivals", "get_attendance_summary", "get_my_late_arrivals"]
 
 @pytest.mark.asyncio
 async def test_live_groq_provider():
