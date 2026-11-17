@@ -12,7 +12,7 @@ class PolicyService:
         """Extract pages from PDF using PyMuPDF."""
         pages = []
         try:
-            import fitz  # PyMuPDF
+            import pymupdf as fitz
             doc = fitz.open(file_path)
             for page_num in range(len(doc)):
                 page = doc[page_num]

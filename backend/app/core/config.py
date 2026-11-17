@@ -25,10 +25,10 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "mock"  # nvidia | groq | gemini | mock
     NVIDIA_API_KEY: Optional[str] = None
     NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
-    NVIDIA_MODEL: str = "mistralai/mistral-large-2407"
+    NVIDIA_MODEL: str = "mistralai/mistral-large-4-1t-a52b"
 
     GROQ_API_KEY: Optional[str] = None
-    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
 
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-1.5-pro"

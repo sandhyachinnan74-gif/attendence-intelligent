@@ -22,4 +22,4 @@ class ConflictException(AttendAIException):
 
 class ValidationException(AttendAIException):
     def __init__(self, detail: str = "Invalid request parameters"):
-        super().__init__(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+        super().__init__(status_code=getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422), detail=detail)

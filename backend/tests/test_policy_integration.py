@@ -1,7 +1,7 @@
 import os
 import pytest
 import tempfile
-import fitz  # PyMuPDF
+import pymupdf as fitz
 import docx
 from httpx import AsyncClient, ASGITransport
 from app.main import app
