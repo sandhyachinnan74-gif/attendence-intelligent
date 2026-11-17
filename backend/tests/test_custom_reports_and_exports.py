@@ -97,7 +97,7 @@ async def test_admin_generate_csv_xlsx_pdf(tokens):
             if fmt == "xlsx":
                 wb = openpyxl.load_workbook(io.BytesIO(dl_res.content))
                 assert "Report Summary" in wb.sheetnames
-                assert "All Records" in wb.sheetnames
+                assert any(s in wb.sheetnames for s in ["Attendance Details", "All Records", "Leave Details"])
             elif fmt == "csv":
                 assert len(dl_res.text.strip().split("\n")) >= 1
 

@@ -125,6 +125,14 @@ class ExportService:
             ext = "csv"
         else: # xlsx
             split_dept = (req.scope_type in ["organization", "multi_department", "multiple_departments"])
+            gen_by = "System Administrator"
+            if current_employee and getattr(current_employee, "first_name", None):
+                gen_by = f"{current_employee.first_name} {current_employee.last_name}"
+            elif getattr(user, "email", None):
+                gen_by = user.email.split("@")[0].replace(".", " ").title()
+            if getattr(user, "role", None) == "admin":
+                gen_by = "System Administrator"
+
             file_bytes = generate_excel_bytes(
                 rows=rows,
                 columns=selected_cols,
@@ -133,7 +141,9 @@ class ExportService:
                 start_date=str(start_d),
                 end_date=str(end_d),
                 organization_name=org_name,
-                split_by_department=split_dept
+                split_by_department=split_dept,
+                report_type=req.report_type,
+                generated_by=gen_by
             )
             ext = "xlsx"
 
