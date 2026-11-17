@@ -1,68 +1,145 @@
-# LLM Provider Setup Guide — AttendAI
+# AttendAI — LLM Provider Setup & Failover Configuration
 
-AttendAI features an enterprise AI execution harness that abstracts LLM providers while enforcing row-level permissions, prompt injection guardrails, tool calling constraints, and citation verification.
-
----
-
-## 1. NVIDIA NIM (Primary Provider)
-
-Official Website: [https://build.nvidia.com/](https://build.nvidia.com/)
-
-### Step-by-Step Configuration:
-1. Navigate to [https://build.nvidia.com/](https://build.nvidia.com/) and click **Sign In** or create a free NVIDIA Developer account.
-2. In the model catalog, search for **Mistral Large** (`mistralai/mistral-large-2407`).
-3. Open the model page and verify availability for API access.
-4. Click **Get API Key** to generate an API key (`nvapi-...`).
-5. Open your local `.env` file and configure:
-   ```env
-   LLM_PROVIDER=nvidia
-   NVIDIA_API_KEY=nvapi-your-key-here
-   NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
-   NVIDIA_MODEL=mistralai/mistral-large-2407
-   ```
+AttendAI features a resilient, multi-tiered AI execution harness capable of seamlessly transitioning between NVIDIA NIM, GroqCloud, Google Gemini, and a deterministic local Mock engine.
 
 ---
 
-## 2. GroqCloud (Fast Inference Backup Provider)
+## 1. Obtaining Cloud API Keys
 
-Official Website: [https://console.groq.com/](https://console.groq.com/)
+> [!CAUTION]
+> **Secret Hygiene**: Never commit actual API keys to version control. Keys must be stored in the root `.env` file (which is git-ignored) or passed as environment variables in production containers.
 
-### Step-by-Step Configuration:
-1. Go to [https://console.groq.com/](https://console.groq.com/) and register or sign in.
-2. Navigate to **API Keys** in the left sidebar.
-3. Click **Create API Key**, name it `attendai-local`, and copy the generated key (`gsk_...`).
-4. Update `.env`:
-   ```env
-   LLM_PROVIDER=groq
-   GROQ_API_KEY=gsk-your-key-here
-   GROQ_MODEL=llama-3.3-70b-versatile
-   ```
+### 1.1 NVIDIA NIM (Primary Provider)
+1. Navigate to the [NVIDIA API Catalog](https://build.nvidia.com/).
+2. Sign in with an NVIDIA developer account.
+3. Locate the model: **`mistralai/mistral-large-4-1t-a52b`** (or `mistral-large-2407`).
+4. Click **Get API Key** and generate a personal key starting with `nvapi-`.
+5. Copy the key for your `.env` file.
 
----
+### 1.2 GroqCloud (Secondary Fallback Provider)
+1. Navigate to the [GroqCloud Console](https://console.groq.com/).
+2. Create an account or sign in.
+3. In the sidebar, select **API Keys**.
+4. Click **Create API Key**, provide a label (e.g. `AttendAI-Failover`), and generate a key starting with `gsk_`.
+5. Copy the key for your `.env` file.
 
-## 3. Google Gemini API (Optional Provider)
-
-Official Website: [https://aistudio.google.com/](https://aistudio.google.com/)
-
-### Step-by-Step Configuration:
-1. Navigate to [https://aistudio.google.com/](https://aistudio.google.com/) and sign in with your Google account.
-2. Click **Get API key** in the left sidebar.
-3. Create a new key and copy the token.
-4. Configure in `.env`:
-   ```env
-   LLM_PROVIDER=gemini
-   GEMINI_API_KEY=AIzaSy...
-   GEMINI_MODEL=gemini-1.5-pro
-   ```
+### 1.3 Google Gemini (Tertiary Optional Provider)
+1. Navigate to [Google AI Studio](https://aistudio.google.com/).
+2. Sign in with a Google account.
+3. Click **Get API Key** and generate a key for Gemini models (`gemini-1.5-pro` or `gemini-1.5-flash`).
+4. Copy the key for your `.env` file.
 
 ---
 
-## 4. Deterministic Mock Engine (Local Zero-Config Fallback)
+## 2. Environment Configuration
 
-If no live API keys are provided, AttendAI automatically runs on its built-in `mock` provider.
-- Full tool calling emulation (`get_my_attendance`, `get_late_arrivals`, `search_attendance_policy`, etc.)
-- Deterministic response synthesis
-- Fully offline, reproducible testing with zero token cost
-```env
-LLM_PROVIDER=mock
+Open or create your `.env` file in the repository root and configure the LLM section:
+
+```ini
+# ==============================================================================
+# LLM Provider Configuration
+# ==============================================================================
+# Primary Provider selector: nvidia | groq | gemini | mock
+LLM_PROVIDER=nvidia
+
+# ------------------------------------------------------------------------------
+# 1. NVIDIA NIM (Primary High-Reasoning Engine)
+# ------------------------------------------------------------------------------
+NVIDIA_API_KEY=nvapi-your_actual_nvidia_key_here
+NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
+NVIDIA_MODEL=mistralai/mistral-large-4-1t-a52b
+
+# ------------------------------------------------------------------------------
+# 2. GroqCloud (Ultra-Fast Automated Secondary Fallback)
+# ------------------------------------------------------------------------------
+GROQ_API_KEY=gsk_your_actual_groq_key_here
+GROQ_MODEL=openai/gpt-oss-120b
+
+# ------------------------------------------------------------------------------
+# 3. Google Gemini (Optional Tertiary Fallback)
+# ------------------------------------------------------------------------------
+GEMINI_API_KEY=AIzaSy_your_optional_gemini_key_here
+GEMINI_MODEL=gemini-1.5-pro
 ```
+
+---
+
+## 3. Testing Provider Connectivity
+
+AttendAI provides automated verification scripts and pytest test suites to validate provider connectivity.
+
+### 3.1 Live Connectivity Test Script
+Run the dedicated verification script to test inference and tool calling on your configured keys:
+
+#### Windows PowerShell:
+```powershell
+$env:PYTHONPATH="backend"
+.\venv\Scripts\python.exe backend/tests/verify_live_llm.py
+```
+
+#### Linux / macOS:
+```bash
+PYTHONPATH=backend ./venv/bin/python backend/tests/verify_live_llm.py
+```
+
+**Expected Output**:
+```
+============================================================
+ATTENDAI — LIVE LLM PROVIDER VERIFICATION SUITE
+============================================================
+[1/4] Testing NVIDIA NIM Live Connectivity...
+  Model: mistralai/mistral-large-4-1t-a52b
+  Status: 200 OK — VERIFIED (Latency: 2450ms)
+[2/4] Testing GroqCloud Live Connectivity...
+  Model: openai/gpt-oss-120b
+  Status: 200 OK — VERIFIED (Latency: 480ms)
+[3/4] Testing Tool Calling with Real Attendance Query...
+  Function invoked: get_late_arrivals
+  Status: SUCCESS
+[4/4] Testing Automated Failover Simulation...
+  Simulating NVIDIA 401 Unauthorized...
+  Failover to GroqCloud: SUCCESS (fallback_used: True)
+============================================================
+ALL LIVE PROVIDERS VERIFIED AND OPERATIONAL
+============================================================
+```
+
+### 3.2 Running the Live Provider Pytest Suite
+Run the automated test suite covering live provider integration:
+
+#### Windows PowerShell:
+```powershell
+$env:PYTHONPATH="backend"
+.\venv\Scripts\pytest.exe backend/tests/test_live_llm_providers.py -v
+```
+
+#### Linux / macOS:
+```bash
+PYTHONPATH=backend ./venv/bin/pytest backend/tests/test_live_llm_providers.py -v
+```
+
+---
+
+## 4. Rate Limits, Timeouts & Error Handling
+
+### 4.1 Automated Fallback Triggers
+The `AIOrchestrator` automatically engages the next provider in the chain under the following conditions:
+- **HTTP 401 / 403**: Invalid or revoked API credentials.
+- **HTTP 429**: Rate limit exceeded (quota throttling).
+- **HTTP 500 / 502 / 503**: Upstream cloud infrastructure outage.
+- **Request Timeout**: NVIDIA requests exceeding 45 seconds or Groq requests exceeding 20 seconds.
+
+### 4.2 Exponential Backoff & Retry
+For transient rate limits (HTTP 429), the Groq provider executes an exponential backoff with jitter up to 3 retry attempts before proceeding down the fallback chain.
+
+### 4.3 Fallback Audit Logging
+Every failover event is recorded in the application logs and attached to the response payload:
+```json
+{
+  "provider": "groq",
+  "model": "openai/gpt-oss-120b",
+  "fallback_used": true,
+  "fallback_reason": "NvidiaNIMProvider returned HTTP 429 (Rate limit reached)"
+}
+```
+This guarantees operational visibility without interrupting user workflows.
