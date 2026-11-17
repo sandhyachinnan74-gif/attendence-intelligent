@@ -28,6 +28,9 @@ yarn-error.log*
 test-results/
 playwright-report/
 
+# Uploads
+uploads/
+
 # OS
 .DS_Store
 Thumbs.db

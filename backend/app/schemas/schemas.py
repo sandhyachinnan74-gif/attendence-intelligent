@@ -299,6 +299,7 @@ class PolicyChunkResponse(BaseModel):
     page_number: int
     content: str
     score: Optional[float] = None
+    citation: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -16,6 +16,7 @@ import {
 import { api } from '../services/api';
 import { AttendanceRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { LiveClock } from '../components/common/LiveClock';
 
 export const Attendance: React.FC = () => {
   const { user } = useAuth();
@@ -29,9 +30,6 @@ export const Attendance: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Live Clock
-  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
-
   // Correction Modal
   const [correctingRecord, setCorrectingRecord] = useState<AttendanceRecord | null>(null);
   const [correctionData, setCorrectionData] = useState({
@@ -39,13 +37,6 @@ export const Attendance: React.FC = () => {
     clock_out: '',
     reason: '',
   });
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const fetchTodayStatus = async () => {
     try {
@@ -174,7 +165,7 @@ export const Attendance: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-bold font-mono tracking-tight text-dark">{currentTime}</span>
+              <LiveClock />
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
                   hasOpenBreak

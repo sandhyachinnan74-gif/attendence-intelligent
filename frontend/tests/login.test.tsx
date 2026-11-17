@@ -1,4 +1,5 @@
 import React from 'react';
+import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { Login } from '../src/pages/Login';

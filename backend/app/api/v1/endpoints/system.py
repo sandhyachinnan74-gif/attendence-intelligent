@@ -1,10 +1,13 @@
 import time
-from fastapi import APIRouter, Depends
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select, desc
 from app.core.database import get_db
 from app.core.config import settings
 from app.cache.redis_client import get_redis
+from app.models.models import AuditLog, User
+from app.api.deps import get_current_admin
 
 router = APIRouter(prefix="/system", tags=["System & Monitoring"])
 
@@ -48,3 +51,34 @@ async def readiness(db: AsyncSession = Depends(get_db)):
 @router.get("/liveness")
 async def liveness():
     return {"status": "alive"}
+
+@router.get("/audit-logs")
+async def get_audit_logs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    action: Optional[str] = None,
+    user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = (
+        select(AuditLog)
+        .where(AuditLog.organization_id == user.organization_id)
+        .order_by(desc(AuditLog.created_at))
+    )
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+    stmt = stmt.offset(skip).limit(limit)
+    res = await db.execute(stmt)
+    logs = res.scalars().all()
+    return [
+        {
+            "id": log.id,
+            "action": log.action,
+            "resource_type": log.resource_type,
+            "resource_id": log.resource_id,
+            "details": log.details,
+            "ip_address": log.ip_address,
+            "created_at": log.created_at
+        }
+        for log in logs
+    ]

@@ -18,7 +18,7 @@ async def list_employees(
     is_active: Optional[bool] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_hr_or_admin),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = (
@@ -168,8 +168,7 @@ async def get_employee(
     emp, dept_name = res
     # Employee permission boundary: employee can only see own private details
     if user.role == "employee" and emp.user_id != user.id:
-        # Filter phone and internal identifiers
-        pass
+        raise ForbiddenException("Access denied: You cannot view another employee's private profile")
 
     return {
         "id": emp.id,
