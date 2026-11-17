@@ -370,10 +370,10 @@ export const Dashboard: React.FC = () => {
               <div className="p-3 bg-slate-50 border border-border rounded-lg">
                 <span className="text-secondary block font-medium">Assigned Shift</span>
                 <span className="font-bold text-dark text-sm block mt-0.5">
-                  {shift?.name} ({shift?.code})
+                  {shift?.name || 'General Standard Shift'} {shift?.code ? `(${shift.code})` : ''}
                 </span>
                 <span className="text-secondary mt-1 block">
-                  Working hours: <strong>{shift?.start_time} – {shift?.end_time}</strong> ({shift?.required_hours}h required)
+                  Working hours: <strong>{shift?.start_time || '09:00'} – {shift?.end_time || '17:00'}</strong> ({shift?.required_hours || 8.0}h required)
                 </span>
               </div>
 
@@ -381,7 +381,7 @@ export const Dashboard: React.FC = () => {
                 <div>
                   <span className="text-secondary block font-medium">Punctuality Grace Period</span>
                   <span className="font-semibold text-dark text-xs block mt-0.5">
-                    {shift?.grace_period_minutes} minutes from shift start
+                    {shift?.grace_period_minutes ?? 15} minutes from shift start
                   </span>
                 </div>
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
