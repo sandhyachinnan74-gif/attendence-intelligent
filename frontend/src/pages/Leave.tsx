@@ -1,20 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Calendar, Clock, CheckCircle, XCircle, AlertCircle, X, Download, History } from 'lucide-react';
+import { Plus, Calendar, Clock, CheckCircle, XCircle, AlertCircle, X, Download, History, FileText, FileSpreadsheet } from 'lucide-react';
 import { api } from '../services/api';
 import { LeaveRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { CustomReportModal } from '../components/reports/CustomReportModal';
-import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
+import { downloadFile } from '../utils/download';
 
 export const Leave: React.FC = () => {
   const { user } = useAuth();
   const [leaves, setLeaves] = useState<LeaveRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingFormat, setDownloadingFormat] = useState<'csv' | 'xlsx' | null>(null);
+
+  const handleDirectExport = async (format: 'csv' | 'xlsx') => {
+    setDownloadingFormat(format);
+    await downloadFile(
+      `/exports/attendance/${format}`,
+      `AttendAI_Leave_Attendance.${format}`,
+      undefined,
+      () => setDownloadingFormat(null),
+      (err) => {
+        setDownloadingFormat(null);
+        window.dispatchEvent(new CustomEvent('attendai:notify', {
+          detail: { message: `Export error: ${err}`, type: 'error' }
+        }));
+      }
+    );
+  };
 
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [reviewingLeave, setReviewingLeave] = useState<LeaveRecord | null>(null);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const [newLeave, setNewLeave] = useState({
     leave_type: 'annual',
@@ -85,18 +99,22 @@ export const Leave: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowReportModal(true)}
-            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => handleDirectExport('csv')}
+            disabled={downloadingFormat !== null}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+            title="Download Leave / Attendance CSV"
           >
-            <Download className="w-3.5 h-3.5 text-secondary" />
-            <span>Export Leave Report</span>
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span>{downloadingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}</span>
           </button>
           <button
-            onClick={() => setShowHistoryModal(true)}
-            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => handleDirectExport('xlsx')}
+            disabled={downloadingFormat !== null}
+            className="px-3 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+            title="Download Day-Wise Attendance Excel Report"
           >
-            <History className="w-3.5 h-3.5 text-secondary" />
-            <span>History</span>
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>{downloadingFormat === 'xlsx' ? 'Exporting...' : 'Export XLS'}</span>
           </button>
           <button
             onClick={() => setShowApplyModal(true)}
@@ -351,26 +369,6 @@ export const Leave: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Custom Report Builder Modal */}
-      <CustomReportModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        initialReportType={user?.role === 'employee' ? 'my_leave_history' : 'leave_report'}
-        onOpenHistory={() => {
-          setShowReportModal(false);
-          setShowHistoryModal(true);
-        }}
-      />
-
-      {/* Export History Modal */}
-      <ExportHistoryModal
-        isOpen={showHistoryModal}
-        onClose={() => setShowHistoryModal(false)}
-        onOpenReportBuilder={() => {
-          setShowHistoryModal(false);
-          setShowReportModal(true);
-        }}
-      />
     </div>
   );
 };

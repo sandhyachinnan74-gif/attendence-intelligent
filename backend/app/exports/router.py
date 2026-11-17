@@ -178,28 +178,50 @@ async def legacy_export_csv(
     db: AsyncSession = Depends(get_db)
 ):
     from datetime import timedelta
+    from app.exports.query_builder import ExportQueryBuilder
+    from app.exports.generators.csv_generator import generate_csv_bytes
+
     s_date = start_date or (date.today() - timedelta(days=30))
     e_date = end_date or date.today()
 
-    target_emp_id = None
-    if user.role == "employee":
-        emp_stmt = select(Employee).where(Employee.user_id == user.id)
-        emp = (await db.execute(emp_stmt)).scalars().first()
-        target_emp_id = emp.id if emp else "__not_found__"
-        filename = f"my_attendance_{s_date}_{e_date}.csv"
-    else:
-        target_emp_id = employee_id
-        filename = f"attendai_attendance_{s_date}_{e_date}.csv"
+    current_emp = (await db.execute(select(Employee).where(Employee.user_id == user.id))).scalars().first()
 
-    csv_stream = await LegacyExportService.export_attendance_csv(
+    if user.role == "employee":
+        report_type = "personal_attendance"
+        scope_type = "personal"
+        target_dept_ids = None
+        target_emp_ids = [current_emp.id] if current_emp else None
+        filename = f"AttendAI_My_Attendance_{s_date}_{e_date}.csv"
+    else:
+        report_type = "attendance"
+        if employee_id:
+            scope_type = "individual_employee"
+            target_dept_ids = None
+            target_emp_ids = [employee_id]
+        elif department_id:
+            scope_type = "department"
+            target_dept_ids = [department_id]
+            target_emp_ids = None
+        else:
+            scope_type = "organization"
+            target_dept_ids = None
+            target_emp_ids = None
+        filename = f"AttendAI_Attendance_{s_date}_{e_date}.csv"
+
+    selected_cols = ExportService._resolve_columns(report_type, None, user.role)
+    rows, meta = await ExportQueryBuilder.fetch_report_data(
         db=db,
-        organization_id=user.organization_id,
+        user=user,
+        current_employee=current_emp,
+        report_type=report_type,
+        scope_type=scope_type,
+        department_ids=target_dept_ids,
+        employee_ids=target_emp_ids,
         start_date=s_date,
-        end_date=e_date,
-        employee_id=target_emp_id
+        end_date=e_date
     )
 
-    content = csv_stream.getvalue().encode("utf-8")
+    content = generate_csv_bytes(rows, selected_cols)
     return Response(
         content=content,
         media_type="text/csv; charset=utf-8",
@@ -221,35 +243,81 @@ async def legacy_export_xlsx(
     db: AsyncSession = Depends(get_db)
 ):
     from datetime import timedelta
+    from app.exports.query_builder import ExportQueryBuilder
+    from app.exports.generators.excel_generator import generate_excel_bytes
+    from app.models.models import Organization
+
     s_date = start_date or (date.today() - timedelta(days=30))
     e_date = end_date or date.today()
 
-    target_emp_id = None
-    if user.role == "employee":
-        emp_stmt = select(Employee).where(Employee.user_id == user.id)
-        emp = (await db.execute(emp_stmt)).scalars().first()
-        target_emp_id = emp.id if emp else "__not_found__"
-        filename = f"my_attendance_{s_date}_{e_date}.xlsx"
-    else:
-        target_emp_id = employee_id
-        filename = f"attendai_attendance_{s_date}_{e_date}.xlsx"
+    current_emp = (await db.execute(select(Employee).where(Employee.user_id == user.id))).scalars().first()
 
-    xlsx_stream = await LegacyExportService.export_attendance_xlsx(
+    org_name = "AttendAI Global Technologies"
+    org = (await db.execute(select(Organization).where(Organization.id == user.organization_id))).scalars().first()
+    if org:
+        org_name = org.name
+
+    if user.role == "employee":
+        report_type = "personal_attendance"
+        scope_type = "personal"
+        target_dept_ids = None
+        target_emp_ids = [current_emp.id] if current_emp else None
+        report_title = "My Daily Attendance Report"
+        filename = f"AttendAI_My_Attendance_{s_date}_{e_date}.xlsx"
+        gen_by = f"{current_emp.first_name} {current_emp.last_name}" if current_emp else "Employee"
+    else:
+        report_type = "attendance"
+        if employee_id:
+            scope_type = "individual_employee"
+            target_dept_ids = None
+            target_emp_ids = [employee_id]
+            report_title = "Employee Attendance Report"
+        elif department_id:
+            scope_type = "department"
+            target_dept_ids = [department_id]
+            target_emp_ids = None
+            report_title = "Department Attendance Report"
+        else:
+            scope_type = "organization"
+            target_dept_ids = None
+            target_emp_ids = None
+            report_title = "Workforce Attendance Report"
+        filename = f"AttendAI_Attendance_{s_date}_{e_date}.xlsx"
+        gen_by = "System Administrator" if user.role == "admin" else "HR Manager"
+
+    selected_cols = ExportService._resolve_columns(report_type, None, user.role)
+    rows, meta = await ExportQueryBuilder.fetch_report_data(
         db=db,
-        organization_id=user.organization_id,
+        user=user,
+        current_employee=current_emp,
+        report_type=report_type,
+        scope_type=scope_type,
+        department_ids=target_dept_ids,
+        employee_ids=target_emp_ids,
         start_date=s_date,
-        end_date=e_date,
-        employee_id=target_emp_id
+        end_date=e_date
     )
 
-    content = xlsx_stream.getvalue()
+    file_bytes = generate_excel_bytes(
+        rows=rows,
+        columns=selected_cols,
+        report_title=report_title,
+        scope_summary=meta["scope_summary"],
+        start_date=str(s_date),
+        end_date=str(e_date),
+        organization_name=org_name,
+        split_by_department=(scope_type == "organization"),
+        report_type=report_type,
+        generated_by=gen_by
+    )
+
     return Response(
-        content=content,
+        content=file_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Access-Control-Expose-Headers": "Content-Disposition",
             "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Content-Length": str(len(content))
+            "Content-Length": str(len(file_bytes))
         }
     )

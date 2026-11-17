@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Calendar, Clock, Moon, Sun, CheckCircle, Users, X, Info, Shield, CheckCircle2, Download, History } from 'lucide-react';
+import { Plus, Calendar, Clock, Moon, Sun, CheckCircle, Users, X, Info, Shield, CheckCircle2, Download, History, FileText, FileSpreadsheet } from 'lucide-react';
 import { api } from '../services/api';
 import { Shift, Employee } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { CustomReportModal } from '../components/reports/CustomReportModal';
-import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
+import { downloadFile } from '../utils/download';
 
 export const Shifts: React.FC = () => {
   const { user } = useAuth();
@@ -14,11 +13,26 @@ export const Shifts: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [myShiftData, setMyShiftData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [downloadingFormat, setDownloadingFormat] = useState<'csv' | 'xlsx' | null>(null);
+
+  const handleDirectExport = async (format: 'csv' | 'xlsx') => {
+    setDownloadingFormat(format);
+    await downloadFile(
+      `/exports/attendance/${format}`,
+      `AttendAI_Shift_Attendance.${format}`,
+      undefined,
+      () => setDownloadingFormat(null),
+      (err) => {
+        setDownloadingFormat(null);
+        window.dispatchEvent(new CustomEvent('attendai:notify', {
+          detail: { message: `Export error: ${err}`, type: 'error' }
+        }));
+      }
+    );
+  };
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const [newShift, setNewShift] = useState({
     name: '',
@@ -122,18 +136,22 @@ export const Shifts: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowReportModal(true)}
-              className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              onClick={() => handleDirectExport('csv')}
+              disabled={downloadingFormat !== null}
+              className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+              title="Download Shift / Attendance CSV"
             >
-              <Download className="w-3.5 h-3.5 text-secondary" />
-              <span>Export Shifts</span>
+              <FileText className="w-3.5 h-3.5 text-blue-600" />
+              <span>{downloadingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}</span>
             </button>
             <button
-              onClick={() => setShowHistoryModal(true)}
-              className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              onClick={() => handleDirectExport('xlsx')}
+              disabled={downloadingFormat !== null}
+              className="px-3 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+              title="Download Day-Wise Attendance Excel Report"
             >
-              <History className="w-3.5 h-3.5 text-secondary" />
-              <span>History</span>
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>{downloadingFormat === 'xlsx' ? 'Exporting...' : 'Export XLS'}</span>
             </button>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-semibold">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
@@ -328,27 +346,6 @@ export const Shifts: React.FC = () => {
             ))}
           </div>
         </div>
-
-        {/* Custom Report Builder Modal */}
-        <CustomReportModal
-          isOpen={showReportModal}
-          onClose={() => setShowReportModal(false)}
-          initialReportType="my_shifts"
-          onOpenHistory={() => {
-            setShowReportModal(false);
-            setShowHistoryModal(true);
-          }}
-        />
-
-        {/* Export History Modal */}
-        <ExportHistoryModal
-          isOpen={showHistoryModal}
-          onClose={() => setShowHistoryModal(false)}
-          onOpenReportBuilder={() => {
-            setShowHistoryModal(false);
-            setShowReportModal(true);
-          }}
-        />
       </div>
     );
   }
@@ -363,18 +360,22 @@ export const Shifts: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowReportModal(true)}
-            className="px-3.5 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => handleDirectExport('csv')}
+            disabled={downloadingFormat !== null}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+            title="Download Shifts / Attendance CSV"
           >
-            <Download className="w-3.5 h-3.5 text-secondary" />
-            <span>Export Shift Report</span>
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span>{downloadingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}</span>
           </button>
           <button
-            onClick={() => setShowHistoryModal(true)}
-            className="px-3.5 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => handleDirectExport('xlsx')}
+            disabled={downloadingFormat !== null}
+            className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+            title="Download Day-Wise Attendance Excel Report"
           >
-            <History className="w-3.5 h-3.5 text-secondary" />
-            <span>History</span>
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>{downloadingFormat === 'xlsx' ? 'Exporting...' : 'Export XLS'}</span>
           </button>
           <button
             onClick={() => setShowAssignModal(true)}
@@ -630,26 +631,6 @@ export const Shifts: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Custom Report Builder Modal */}
-      <CustomReportModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        initialReportType="shift_report"
-        onOpenHistory={() => {
-          setShowReportModal(false);
-          setShowHistoryModal(true);
-        }}
-      />
-
-      {/* Export History Modal */}
-      <ExportHistoryModal
-        isOpen={showHistoryModal}
-        onClose={() => setShowHistoryModal(false)}
-        onOpenReportBuilder={() => {
-          setShowHistoryModal(false);
-          setShowReportModal(true);
-        }}
-      />
     </div>
   );
 };

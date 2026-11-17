@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   AlertCircle,
   FileSpreadsheet,
+  FileText,
   Edit,
   X,
   RefreshCw,
@@ -20,8 +21,6 @@ import { AttendanceRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LiveClock } from '../components/common/LiveClock';
 import { downloadFile } from '../utils/download';
-import { CustomReportModal } from '../components/reports/CustomReportModal';
-import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
 
 export const Attendance: React.FC = () => {
   const { user } = useAuth();
@@ -29,15 +28,39 @@ export const Attendance: React.FC = () => {
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [downloadingFormat, setDownloadingFormat] = useState<'csv' | 'xlsx' | null>(null);
 
   // Filters
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  // Report Modal states
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const handleDirectExport = async (format: 'csv' | 'xlsx') => {
+    setDownloadingFormat(format);
+    const isEmployee = user?.role === 'employee';
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+
+    const queryStr = params.toString() ? `?${params.toString()}` : '';
+    const endpoint = `/exports/attendance/${format}${queryStr}`;
+    const filename = isEmployee 
+      ? `AttendAI_My_Attendance.${format}`
+      : `AttendAI_Attendance.${format}`;
+
+    await downloadFile(
+      endpoint,
+      filename,
+      undefined,
+      () => setDownloadingFormat(null),
+      (err) => {
+        setDownloadingFormat(null);
+        window.dispatchEvent(new CustomEvent('attendai:notify', {
+          detail: { message: `Export error: ${err}`, type: 'error' }
+        }));
+      }
+    );
+  };
 
   // Correction Modal
   const [correctingRecord, setCorrectingRecord] = useState<AttendanceRecord | null>(null);
@@ -164,18 +187,22 @@ export const Attendance: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowReportModal(true)}
-            className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => handleDirectExport('csv')}
+            disabled={downloadingFormat !== null}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+            title="Download Attendance CSV"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Attendance</span>
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span>{downloadingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}</span>
           </button>
           <button
-            onClick={() => setShowHistoryModal(true)}
-            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => handleDirectExport('xlsx')}
+            disabled={downloadingFormat !== null}
+            className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+            title="Download Day-Wise Attendance Excel Report"
           >
-            <History className="w-3.5 h-3.5 text-secondary" />
-            <span>History</span>
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>{downloadingFormat === 'xlsx' ? 'Exporting...' : 'Export XLS'}</span>
           </button>
         </div>
       </div>
@@ -472,28 +499,6 @@ export const Attendance: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Custom Report Builder Modal */}
-      <CustomReportModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        initialReportType={user?.role === 'employee' ? 'my_attendance_history' : 'attendance_org'}
-        initialStartDate={startDate}
-        initialEndDate={endDate}
-        onOpenHistory={() => {
-          setShowReportModal(false);
-          setShowHistoryModal(true);
-        }}
-      />
-
-      {/* Export History Modal */}
-      <ExportHistoryModal
-        isOpen={showHistoryModal}
-        onClose={() => setShowHistoryModal(false)}
-        onOpenReportBuilder={() => {
-          setShowHistoryModal(false);
-          setShowReportModal(true);
-        }}
-      />
     </div>
   );
 };

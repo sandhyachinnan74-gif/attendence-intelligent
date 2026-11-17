@@ -324,8 +324,19 @@ class ExportQueryBuilder:
                 ot_hrs = round(att.overtime_minutes / 60.0, 2)
                 reg_hrs = max(0.0, round(worked_hrs - ot_hrs, 2))
 
+                day_str = "-"
+                if hasattr(att.date, "strftime"):
+                    day_str = att.date.strftime("%A")
+                elif isinstance(att.date, str):
+                    try:
+                        from datetime import datetime
+                        day_str = datetime.strptime(att.date, "%Y-%m-%d").strftime("%A")
+                    except Exception:
+                        day_str = "-"
+
                 rows.append({
                     "date": str(att.date),
+                    "day": day_str,
                     "employee_code": emp.employee_code,
                     "employee_name": f"{emp.first_name} {emp.last_name}",
                     "department": dept_name,

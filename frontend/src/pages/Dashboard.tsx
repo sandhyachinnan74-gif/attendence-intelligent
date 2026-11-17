@@ -18,6 +18,7 @@ import {
   CalendarCheck,
   CheckCircle2,
   FileText,
+  FileSpreadsheet,
   Bot,
   Building,
   Calendar,
@@ -50,8 +51,6 @@ import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { LiveClock } from '../components/common/LiveClock';
 import { downloadFile } from '../utils/download';
-import { CustomReportModal } from '../components/reports/CustomReportModal';
-import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -61,10 +60,29 @@ export const Dashboard: React.FC = () => {
   const [employeeData, setEmployeeData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [clockActionLoading, setClockActionLoading] = useState(false);
+  const [downloadingFormat, setDownloadingFormat] = useState<'csv' | 'xlsx' | null>(null);
 
-  // Report & Export builder modals
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const handleDirectExport = async (format: 'csv' | 'xlsx') => {
+    setDownloadingFormat(format);
+    const isEmployee = user?.role === 'employee';
+    const endpoint = `/exports/attendance/${format}`;
+    const filename = isEmployee 
+      ? `AttendAI_My_Attendance.${format}`
+      : `AttendAI_Attendance.${format}`;
+    
+    await downloadFile(
+      endpoint,
+      filename,
+      undefined,
+      () => setDownloadingFormat(null),
+      (err) => {
+        setDownloadingFormat(null);
+        window.dispatchEvent(new CustomEvent('attendai:notify', {
+          detail: { message: `Export error: ${err}`, type: 'error' }
+        }));
+      }
+    );
+  };
 
   // Leave request modal state (for employees)
   const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -245,20 +263,22 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="flex items-center gap-2.5">
             <button
-              onClick={() => setShowReportModal(true)}
-              className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-              title="Create Custom Report"
+              onClick={() => handleDirectExport('csv')}
+              disabled={downloadingFormat !== null}
+              className="px-3 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+              title="Download My Attendance CSV"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Report</span>
+              <FileText className="w-3.5 h-3.5 text-blue-600" />
+              <span>{downloadingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}</span>
             </button>
             <button
-              onClick={() => setShowHistoryModal(true)}
-              className="px-3 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-              title="View Export History"
+              onClick={() => handleDirectExport('xlsx')}
+              disabled={downloadingFormat !== null}
+              className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+              title="Download My Attendance Day-Wise Excel Report"
             >
-              <History className="w-3.5 h-3.5 text-secondary" />
-              <span>History</span>
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>{downloadingFormat === 'xlsx' ? 'Exporting...' : 'Export XLS'}</span>
             </button>
             <button
               onClick={fetchEmployeeDashboard}
@@ -695,26 +715,6 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
         )}
-        {/* Custom Report Builder Modal */}
-        <CustomReportModal
-          isOpen={showReportModal}
-          onClose={() => setShowReportModal(false)}
-          initialReportType="personal_attendance"
-          onOpenHistory={() => {
-            setShowReportModal(false);
-            setShowHistoryModal(true);
-          }}
-        />
-
-        {/* Export History Modal */}
-        <ExportHistoryModal
-          isOpen={showHistoryModal}
-          onClose={() => setShowHistoryModal(false)}
-          onOpenReportBuilder={() => {
-            setShowHistoryModal(false);
-            setShowReportModal(true);
-          }}
-        />
       </div>
     );
   }
@@ -758,18 +758,22 @@ export const Dashboard: React.FC = () => {
             <span>Refresh</span>
           </button>
           <button
-            onClick={() => setShowReportModal(true)}
-            className="px-3.5 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+            onClick={() => handleDirectExport('csv')}
+            disabled={downloadingFormat !== null}
+            className="px-3 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+            title="Download Workforce Attendance CSV"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Report</span>
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span>{downloadingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}</span>
           </button>
           <button
-            onClick={() => setShowHistoryModal(true)}
-            className="px-3 py-1.5 bg-white border border-border rounded-lg text-xs font-medium text-dark hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+            onClick={() => handleDirectExport('xlsx')}
+            disabled={downloadingFormat !== null}
+            className="px-3.5 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer disabled:opacity-50"
+            title="Download Workforce Day-Wise Attendance Excel Report"
           >
-            <History className="w-3.5 h-3.5 text-secondary" />
-            <span>History</span>
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>{downloadingFormat === 'xlsx' ? 'Exporting...' : 'Export XLS'}</span>
           </button>
         </div>
       </div>
@@ -1148,27 +1152,6 @@ export const Dashboard: React.FC = () => {
           ))}
         </div>
       </div>
-
-      {/* Custom Report Builder Modal */}
-      <CustomReportModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        initialReportType="workforce_summary"
-        onOpenHistory={() => {
-          setShowReportModal(false);
-          setShowHistoryModal(true);
-        }}
-      />
-
-      {/* Export History Modal */}
-      <ExportHistoryModal
-        isOpen={showHistoryModal}
-        onClose={() => setShowHistoryModal(false)}
-        onOpenReportBuilder={() => {
-          setShowHistoryModal(false);
-          setShowReportModal(true);
-        }}
-      />
     </div>
   );
 };

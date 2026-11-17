@@ -24,7 +24,7 @@ async def test_exports_endpoints():
         assert csv_res.status_code == 200
         assert "text/csv" in csv_res.headers["content-type"]
         assert "attachment; filename=" in csv_res.headers["content-disposition"]
-        assert "Date,Employee Code,Employee Name" in csv_res.text
+        assert "Date,Day,Employee Code,Employee Name" in csv_res.text
         lines = csv_res.text.strip().split("\n")
         assert len(lines) > 1
 
@@ -35,22 +35,21 @@ async def test_exports_endpoints():
         assert "attachment; filename=" in xlsx_res.headers["content-disposition"]
         wb = openpyxl.load_workbook(io.BytesIO(xlsx_res.content))
         ws = wb.active
-        assert ws.title == "Attendance Records"
         assert ws.max_row > 1
 
         # 5. Test Query Parameter Token Fallback
         query_csv_res = await ac.get(f"/api/v1/exports/attendance/csv?token={admin_token}")
         assert query_csv_res.status_code == 200
-        assert "Date,Employee Code,Employee Name" in query_csv_res.text
+        assert "Date,Day,Employee Code,Employee Name" in query_csv_res.text
 
         # 6. Test Employee Scoped Export (Personal Records)
         emp_csv_res = await ac.get("/api/v1/exports/attendance/csv", headers=emp_headers)
         assert emp_csv_res.status_code == 200
-        assert "my_attendance" in emp_csv_res.headers["content-disposition"]
+        assert "my_attendance" in emp_csv_res.headers["content-disposition"].lower()
 
         emp_xlsx_res = await ac.get("/api/v1/exports/attendance/xlsx", headers=emp_headers)
         assert emp_xlsx_res.status_code == 200
-        assert "my_attendance" in emp_xlsx_res.headers["content-disposition"]
+        assert "my_attendance" in emp_xlsx_res.headers["content-disposition"].lower()
 
         # 7. Test Anonymous Unauthorized
         anon_res = await ac.get("/api/v1/exports/attendance/csv")

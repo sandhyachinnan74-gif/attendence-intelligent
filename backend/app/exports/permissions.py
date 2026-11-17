@@ -42,6 +42,7 @@ EMPLOYEE_REPORT_TYPES = [
 COLUMNS_REGISTRY = {
     "attendance": [
         {"id": "date", "label": "Date", "is_default": True},
+        {"id": "day", "label": "Day", "is_default": True},
         {"id": "employee_code", "label": "Employee Code", "is_default": True},
         {"id": "employee_name", "label": "Employee Name", "is_default": True},
         {"id": "department", "label": "Department", "is_default": True},
@@ -58,6 +59,7 @@ COLUMNS_REGISTRY = {
     ],
     "personal_attendance": [
         {"id": "date", "label": "Date", "is_default": True},
+        {"id": "day", "label": "Day", "is_default": True},
         {"id": "shift_name", "label": "Assigned Shift", "is_default": True},
         {"id": "scheduled_start", "label": "Scheduled Start", "is_default": False},
         {"id": "scheduled_end", "label": "Scheduled End", "is_default": False},

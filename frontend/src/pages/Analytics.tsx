@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Download, FileSpreadsheet, BarChart2, TrendingUp, Users, Clock, AlertTriangle, Loader2, History } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, BarChart2, TrendingUp, Users, Clock, AlertTriangle, Loader2, History } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -13,14 +13,28 @@ import {
 } from 'recharts';
 import { api } from '../services/api';
 import { DashboardData } from '../types';
-import { CustomReportModal } from '../components/reports/CustomReportModal';
-import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
+import { downloadFile } from '../utils/download';
 
 export const Analytics: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [downloadingFormat, setDownloadingFormat] = useState<'csv' | 'xlsx' | null>(null);
+
+  const handleDirectExport = async (format: 'csv' | 'xlsx') => {
+    setDownloadingFormat(format);
+    await downloadFile(
+      `/exports/attendance/${format}`,
+      `AttendAI_Analytics_Attendance.${format}`,
+      undefined,
+      () => setDownloadingFormat(null),
+      (err) => {
+        setDownloadingFormat(null);
+        window.dispatchEvent(new CustomEvent('attendai:notify', {
+          detail: { message: `Export error: ${err}`, type: 'error' }
+        }));
+      }
+    );
+  };
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -49,18 +63,22 @@ export const Analytics: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowReportModal(true)}
-            className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => handleDirectExport('csv')}
+            disabled={downloadingFormat !== null}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+            title="Download Analytics CSV"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export Analytics Report</span>
+            <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <span>{downloadingFormat === 'csv' ? 'Exporting...' : 'Export CSV'}</span>
           </button>
           <button
-            onClick={() => setShowHistoryModal(true)}
-            className="px-3.5 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => handleDirectExport('xlsx')}
+            disabled={downloadingFormat !== null}
+            className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+            title="Download Day-Wise Attendance Excel Report"
           >
-            <History className="w-3.5 h-3.5 text-secondary" />
-            <span>History</span>
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>{downloadingFormat === 'xlsx' ? 'Exporting...' : 'Export XLS'}</span>
           </button>
         </div>
       </div>
@@ -141,26 +159,6 @@ export const Analytics: React.FC = () => {
           </div>
         </div>
       </div>
-      {/* Custom Report Builder Modal */}
-      <CustomReportModal
-        isOpen={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        initialReportType="workforce_analytics"
-        onOpenHistory={() => {
-          setShowReportModal(false);
-          setShowHistoryModal(true);
-        }}
-      />
-
-      {/* Export History Modal */}
-      <ExportHistoryModal
-        isOpen={showHistoryModal}
-        onClose={() => setShowHistoryModal(false)}
-        onOpenReportBuilder={() => {
-          setShowHistoryModal(false);
-          setShowReportModal(true);
-        }}
-      />
     </div>
   );
 };
