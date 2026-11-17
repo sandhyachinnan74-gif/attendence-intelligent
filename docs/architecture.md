@@ -22,8 +22,8 @@ flowchart TD
     subgraph ApplicationLayer["Application Services Tier"]
         Backend1["FastAPI Application Replica 1\n(Port 8000)"]
         Backend2["FastAPI Application Replica 2\n(Port 8000)"]
-        Nginx -->|/api/v1/*| Backend1
-        Nginx -->|/api/v1/*| Backend2
+        Nginx -->|"/api/v1/*"| Backend1
+        Nginx -->|"/api/v1/*"| Backend2
         
         Orchestrator["AI Execution Harness\n(AIOrchestrator)"]
         Backend1 --> Orchestrator

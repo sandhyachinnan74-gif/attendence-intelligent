@@ -1,6 +1,7 @@
 # AttendAI
 ### Intelligent Workforce. Smarter Decisions.
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7.svg?logo=render&logoColor=white)](https://attend-ai-yne6.onrender.com)
 [![Python](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-1.0.0-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
@@ -9,6 +10,8 @@
 [![NVIDIA NIM](https://img.shields.io/badge/NVIDIA%20NIM-Mistral%20Large%204-76B900.svg?logo=nvidia&logoColor=white)](https://build.nvidia.com)
 [![Groq](https://img.shields.io/badge/Groq-GPT--OSS--120B-F55036.svg)](https://groq.com)
 [![Tests](https://img.shields.io/badge/Pytest-85%2F85%20Passed%20(100%25)-brightgreen.svg)]()
+
+> 🚀 **Live Production Application:** [https://attend-ai-yne6.onrender.com](https://attend-ai-yne6.onrender.com)
 
 AttendAI is a production-grade, AI-powered workforce time-and-attendance management platform engineered with a Dayforce-inspired enterprise user experience. It unifies deterministic attendance calculation, unsupervised machine learning anomaly detection, grounded tool-augmented AI orchestrations, in-browser policy document extraction, and a custom report builder.
 
@@ -147,27 +150,22 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Client["Client Browser (Chrome, Edge, Safari)"] --> Nginx["Nginx Reverse Proxy & Load Balancer\n(Ports 80 & 8000)"]
+    Client["Client Browser (Chrome, Edge, Safari)"] --> Nginx["Nginx Reverse Proxy & Load Balancer (Port 80)"]
     
-    subgraph ProductionCluster["AttendAI Containerized Cluster"]
-        Nginx -->|SPA Static Assets| Frontend["React 18 / Vite SPA Container"]
-        Nginx -->|/api/v1/* (least_conn)| Cluster["FastAPI Backend Cluster"]
+    subgraph ProductionCluster["AttendAI Containerized Production Cluster"]
+        Nginx -->|"SPA Static Assets"| Frontend["React 18 / Vite SPA Container"]
+        Nginx -->|"API Proxy /api/v1"| BackendPool["FastAPI Application Services"]
         
-        subgraph Cluster["Stateless Backend Replicas"]
-            B1["backend_1:8000"]
-            B2["backend_2:8000"]
-        end
-        
-        Cluster <--> DB[("PostgreSQL 16\n(attendai db)")]
-        Cluster <--> Redis[("Redis 7\n(sessions & cache)")]
-        Cluster <--> Storage["File Storage\n(./uploads & ./exports)"]
+        BackendPool <--> DB[("PostgreSQL 16 Database")]
+        BackendPool <--> Redis[("Redis 7 Cache & Sessions")]
+        BackendPool <--> Storage["File Storage (Uploads & Exports)"]
     end
 
     subgraph AICloud["External AI Inference Layer"]
-        Cluster -->|1. Primary Inference| NvidiaNIM["NVIDIA NIM API\n(Mistral Large 4)"]
-        Cluster -.->|2. On 4xx/5xx/Timeout| GroqCloud["GroqCloud API\n(GPT-OSS-120B)"]
-        Cluster -.->|3. Failover| Gemini["Google Gemini API\n(Gemini 1.5 Pro)"]
-        Cluster -.->|4. Offline Mode| MockLLM["Local Deterministic Mock Engine"]
+        BackendPool -->|"1. Primary Inference"| NvidiaNIM["NVIDIA NIM API (Mistral Large 4)"]
+        BackendPool -.->|"2. Fallback"| GroqCloud["GroqCloud API (GPT-OSS-120B)"]
+        BackendPool -.->|"3. Fallback"| Gemini["Google Gemini API (Gemini 1.5 Pro)"]
+        BackendPool -.->|"4. Offline Mode"| MockLLM["Local Deterministic Mock Engine"]
     end
 ```
 
@@ -362,6 +360,8 @@ DayForce/
 ---
 
 ## 14. Quickstart & Installation
+
+> 🌐 **Try the Live Cloud Deployment:** Access AttendAI online without installing anything locally at [https://attend-ai-yne6.onrender.com](https://attend-ai-yne6.onrender.com).
 
 ### Option A: Launch with Docker Compose (Recommended)
 ```bash

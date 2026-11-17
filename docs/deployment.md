@@ -1,5 +1,7 @@
 # AttendAI — Production Deployment & Infrastructure Guide
 
+> 🚀 **Live Production Deployment:** [https://attend-ai-yne6.onrender.com](https://attend-ai-yne6.onrender.com)
+
 This document describes the production deployment topology, Docker containerization, Nginx load balancing, and operational disaster recovery procedures for AttendAI.
 
 ---
@@ -10,19 +12,14 @@ In production, AttendAI runs as a containerized microservice cluster behind an N
 
 ```mermaid
 flowchart TD
-    Client["Inbound Client Traffic\n(Internet / Corporate LAN)"] --> Nginx["Nginx Reverse Proxy & Load Balancer\n(Ports 80 & 443)\nleast_conn algorithm"]
+    Client["Inbound Client Traffic (Internet / Corporate LAN)"] --> Nginx["Nginx Reverse Proxy & Load Balancer (Ports 80 & 443)"]
     
     subgraph ContainerNetwork["AttendAI Docker Bridge Network"]
-        Nginx -->|/api/*| Cluster["FastAPI Backend Cluster"]
-        Nginx -->|/| Front["Frontend Container\n(Nginx serving static SPA)"]
+        Nginx -->|"API Proxy /api/*"| BackendServices["FastAPI Application Cluster"]
+        Nginx -->|"SPA Root /"| Front["Frontend Container (Nginx Static SPA)"]
         
-        subgraph Cluster["FastAPI Load Balanced Cluster"]
-            B1["backend_1\n(FastAPI / Uvicorn)\nPort 8000"]
-            B2["backend_2\n(FastAPI / Uvicorn)\nPort 8000"]
-        end
-        
-        B1 & B2 <--> Postgres[("PostgreSQL 16 Alpine\nPort 5432\nVolume: postgres_data")]
-        B1 & B2 <--> Redis[("Redis 7 Alpine\nPort 6379\nVolume: redis_data")]
+        BackendServices <--> Postgres[("PostgreSQL 16 Alpine Database")]
+        BackendServices <--> Redis[("Redis 7 Alpine Cache")]
     end
 ```
 
