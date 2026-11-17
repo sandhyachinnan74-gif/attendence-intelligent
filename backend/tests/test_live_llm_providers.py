@@ -23,7 +23,10 @@ async def test_live_nvidia_nim_mistral_large_4():
 async def test_live_nvidia_nim_tool_calling():
     provider = NvidiaNIMProvider()
     response = await provider.generate_response(
-        messages=[{"role": "user", "content": "Which employees arrived late in the last 7 days?"}],
+        messages=[
+            {"role": "system", "content": "You are AttendAI assistant. Always query the backend database tools to fetch requested workforce records."},
+            {"role": "user", "content": "Which employees arrived late in the last 7 days? Query the records."}
+        ],
         tools=TOOL_DEFINITIONS[:4],
         temperature=0.1
     )

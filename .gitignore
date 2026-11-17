@@ -30,6 +30,7 @@ playwright-report/
 
 # Uploads
 uploads/
+exports_storage/
 
 # OS
 .DS_Store

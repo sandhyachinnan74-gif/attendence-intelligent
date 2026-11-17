@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Calendar, Clock, Moon, Sun, CheckCircle, Users, X, Info, Shield, CheckCircle2 } from 'lucide-react';
+import { Plus, Calendar, Clock, Moon, Sun, CheckCircle, Users, X, Info, Shield, CheckCircle2, Download, History } from 'lucide-react';
 import { api } from '../services/api';
 import { Shift, Employee } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { CustomReportModal } from '../components/reports/CustomReportModal';
+import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
 
 export const Shifts: React.FC = () => {
   const { user } = useAuth();
@@ -15,6 +17,8 @@ export const Shifts: React.FC = () => {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const [newShift, setNewShift] = useState({
     name: '',
@@ -117,6 +121,20 @@ export const Shifts: React.FC = () => {
             <p className="text-xs text-secondary mt-0.5">View your assigned working shift, scheduled hours, and grace windows.</p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowReportModal(true)}
+              className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5 text-secondary" />
+              <span>Export Shifts</span>
+            </button>
+            <button
+              onClick={() => setShowHistoryModal(true)}
+              className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5 text-secondary" />
+              <span>History</span>
+            </button>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-semibold">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
               Schedule Active
@@ -310,6 +328,27 @@ export const Shifts: React.FC = () => {
             ))}
           </div>
         </div>
+
+        {/* Custom Report Builder Modal */}
+        <CustomReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          initialReportType="my_shifts"
+          onOpenHistory={() => {
+            setShowReportModal(false);
+            setShowHistoryModal(true);
+          }}
+        />
+
+        {/* Export History Modal */}
+        <ExportHistoryModal
+          isOpen={showHistoryModal}
+          onClose={() => setShowHistoryModal(false)}
+          onOpenReportBuilder={() => {
+            setShowHistoryModal(false);
+            setShowReportModal(true);
+          }}
+        />
       </div>
     );
   }
@@ -323,6 +362,20 @@ export const Shifts: React.FC = () => {
           <p className="text-xs text-secondary mt-0.5">Manage working shift definitions, grace periods and assignments.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="px-3.5 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-secondary" />
+            <span>Export Shift Report</span>
+          </button>
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            className="px-3.5 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5 text-secondary" />
+            <span>History</span>
+          </button>
           <button
             onClick={() => setShowAssignModal(true)}
             className="px-3.5 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-colors"
@@ -577,6 +630,26 @@ export const Shifts: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Custom Report Builder Modal */}
+      <CustomReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        initialReportType="shift_report"
+        onOpenHistory={() => {
+          setShowReportModal(false);
+          setShowHistoryModal(true);
+        }}
+      />
+
+      {/* Export History Modal */}
+      <ExportHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        onOpenReportBuilder={() => {
+          setShowHistoryModal(false);
+          setShowReportModal(true);
+        }}
+      />
     </div>
   );
 };

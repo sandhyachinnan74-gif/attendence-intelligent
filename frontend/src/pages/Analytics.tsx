@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Download, FileSpreadsheet, BarChart2, TrendingUp, Users, Clock, AlertTriangle, Loader2 } from 'lucide-react';
+import { Download, FileSpreadsheet, BarChart2, TrendingUp, Users, Clock, AlertTriangle, Loader2, History } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -13,12 +13,14 @@ import {
 } from 'recharts';
 import { api } from '../services/api';
 import { DashboardData } from '../types';
-import { downloadFile } from '../utils/download';
+import { CustomReportModal } from '../components/reports/CustomReportModal';
+import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
 
 export const Analytics: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [exportingType, setExportingType] = useState<string | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -47,28 +49,18 @@ export const Analytics: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => downloadFile('/exports/attendance/csv', 'attendai_attendance.csv', () => setExportingType('csv'), () => setExportingType(null))}
-            disabled={exportingType !== null}
-            className="px-3.5 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm disabled:opacity-50 transition-colors"
+            onClick={() => setShowReportModal(true)}
+            className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
           >
-            {exportingType === 'csv' ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-            ) : (
-              <Download className="w-3.5 h-3.5 text-secondary" />
-            )}
-            <span>Download CSV</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Analytics Report</span>
           </button>
           <button
-            onClick={() => downloadFile('/exports/attendance/xlsx', 'attendai_attendance.xlsx', () => setExportingType('xlsx'), () => setExportingType(null))}
-            disabled={exportingType !== null}
-            className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm disabled:opacity-50 transition-colors"
+            onClick={() => setShowHistoryModal(true)}
+            className="px-3.5 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
           >
-            {exportingType === 'xlsx' ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
-            ) : (
-              <FileSpreadsheet className="w-3.5 h-3.5" />
-            )}
-            <span>Download XLSX</span>
+            <History className="w-3.5 h-3.5 text-secondary" />
+            <span>History</span>
           </button>
         </div>
       </div>
@@ -149,6 +141,26 @@ export const Analytics: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* Custom Report Builder Modal */}
+      <CustomReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        initialReportType="workforce_analytics"
+        onOpenHistory={() => {
+          setShowReportModal(false);
+          setShowHistoryModal(true);
+        }}
+      />
+
+      {/* Export History Modal */}
+      <ExportHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        onOpenReportBuilder={() => {
+          setShowHistoryModal(false);
+          setShowReportModal(true);
+        }}
+      />
     </div>
   );
 };

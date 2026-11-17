@@ -1649,11 +1649,11 @@ class ToolRegistry:
                 "query": query,
                 "matches": [
                     {
-                        "policy_title": m.policy_title,
-                        "section": m.section,
-                        "page_number": m.page_number,
-                        "content": m.content,
-                        "citation": m.citation
+                        "policy_title": m.get("policy_title") if isinstance(m, dict) else getattr(m, "policy_title", ""),
+                        "section": m.get("section") if isinstance(m, dict) else getattr(m, "section", ""),
+                        "page_number": m.get("page_number") if isinstance(m, dict) else getattr(m, "page_number", 1),
+                        "content": m.get("content") if isinstance(m, dict) else getattr(m, "content", ""),
+                        "citation": m.get("citation") if isinstance(m, dict) else getattr(m, "citation", "")
                     }
                     for m in matches
                 ]

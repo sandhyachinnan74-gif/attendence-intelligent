@@ -104,6 +104,40 @@ All environment-verifiable components were tested and validated with zero mock c
 - **Global Search API (`/api/v1/search`)**: Role-scoped full-text search across employees, departments, shifts, attendance records, leave requests, policies, and anomalies with keyboard navigation and direct navigation popover.
 - **Admin System Diagnostics Guard**: Access to `/diagnostics` and `/api/v1/system/diagnostics` is strictly gated to Administrators (returns HTTP 403 Forbidden for HR Managers and Employees). Public health check `/api/v1/system/health` is sanitized to ensure underlying LLM providers are not leaked to unauthenticated users.
 
+### 2.9 Advanced Role-Based Custom Export Popup & Report Management System
+- **Zero Immediate File Downloads**: Clicking any Export button across the entire AttendAI application (Dashboard, Time & Attendance, Employees, Leave Management, Analytics, Shifts & Scheduling) never triggers an immediate download. Instead, it opens a professional multi-step modal titled **"What would you like to download?"**.
+- **Role-Aware Document Selection (Step 1)**:
+  - **Administrator (10 Report Types)**: Complete Organization Report, Department Report, Individual Employee Report, Multiple Employee Report, Attendance Report, Overtime Report, Leave Report, Shift Report, Anomaly Report, Workforce Analytics Report.
+  - **HR Manager (8 Report Types)**: Authorized Department Report, Individual Employee Report, Multiple Employee Report, Attendance Report, Overtime Report, Leave Report, Shift Report, Anomaly Report.
+  - **Employee (7 Personal Types)**: My Monthly Attendance, My Attendance History, My Overtime Report, My Working Hours, My Leave History, My Leave Balance, My Shift History.
+- **Strict Data Scope Enforcement (Step 2)**:
+  - **Administrator**: Full organization-level access, single department, multi-department, single employee, or multi-employee selection.
+  - **HR Manager**: Departmental jurisdiction scoping with protection against unauthorized cross-department leaks.
+  - **Employee**: Automatically locks data scope to personal verified records; department and peer employee pickers are completely omitted.
+- **Comprehensive Date Range Selection (Step 3)**:
+  - Presets: *Today, Yesterday, This Week, Last Week, This Month, Last Month, Last 7 Days, Last 30 Days, Last 90 Days*.
+  - Custom Date Range Picker: Dual start-date and end-date selectors with server-side validation.
+  - Granular Filters: Attendance status (present, late, half-day, absent), minimum late minutes threshold, and minimum overtime hours threshold.
+- **Three Authentic Production File Formats (Step 4)**:
+  - **CSV (.csv)**: Clean UTF-8 encoded comma-separated values compatible with all spreadsheet software.
+  - **Excel (.xlsx)**: Formatted workbooks generated via `openpyxl` with styled navy headers, auto-fit column widths, summary KPI worksheets, and optional per-department tab splitting.
+  - **PDF (.pdf)**: High-resolution printable executive documents generated via `ReportLab` with corporate headers, metadata block, styled tables, and dynamic `Page X of Y` numbered canvas.
+- **Interactive Information & Column Selection (Step 5)**:
+  - Dynamic column registry per report category with "Select All" and "Restore Defaults" actions.
+- **Live Preview Before Download (Step 6)**:
+  - Summarizes document title, data scope, date range, selected columns, and output format.
+  - Calls `/api/v1/exports/preview` to fetch exact live matching record counts from the database before generating.
+  - Two explicit action buttons: **Cancel** and **Generate & Download**.
+- **Meaningful Filename Convention**:
+  - Automatically formats downloads with standard enterprise naming: `AttendAI_<Report_Name>_<Date_Period>.<ext>` (e.g. `AttendAI_My_Attendance_November_2026.xlsx`, `AttendAI_Engineering_Attendance_20261101_20261117.csv`, `AttendAI_Employee_Report_November_2026.pdf`).
+- **Persistent Export History Subsystem**:
+  - Database-backed `ExportRecord` table recording all generated reports with record count, file size, timestamps, and parameters.
+  - Dedicated Export History modal accessible from navigation headers and report builder.
+  - Role isolation: Admins see all org exports, HR sees authorized exports, Employees see only personal exports.
+- **Today's Attendance Population**:
+  - Populated 188 verified attendance records for today (`2026-11-17`) across the workforce.
+  - Configured Alex Mercer (EMP001) with an active shift clocked in at `09:00:00` local time, actively working with punch tracking.
+
 ---
 
 ## 3. Live Verified AI/LLM Integrations & Failover Suite

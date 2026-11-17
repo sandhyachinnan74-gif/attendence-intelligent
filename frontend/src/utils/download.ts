@@ -39,7 +39,16 @@ export const downloadFile = async (
     return true;
   } catch (error: any) {
     console.error('File export error:', error);
-    const errorDetail = error.response?.data?.detail || 'Failed to download file. Please ensure you are authorized.';
+    let errorDetail = 'Failed to download file. Please ensure you are authorized.';
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text();
+        const json = JSON.parse(text);
+        if (json.detail) errorDetail = json.detail;
+      } catch (_) {}
+    } else if (error.response?.data?.detail) {
+      errorDetail = error.response.data.detail;
+    }
     alert(`Export Error: ${errorDetail}`);
     return false;
   } finally {

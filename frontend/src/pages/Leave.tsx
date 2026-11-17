@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Calendar, Clock, CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
+import { Plus, Calendar, Clock, CheckCircle, XCircle, AlertCircle, X, Download, History } from 'lucide-react';
 import { api } from '../services/api';
 import { LeaveRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { CustomReportModal } from '../components/reports/CustomReportModal';
+import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
 
 export const Leave: React.FC = () => {
   const { user } = useAuth();
@@ -11,6 +13,8 @@ export const Leave: React.FC = () => {
 
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [reviewingLeave, setReviewingLeave] = useState<LeaveRecord | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   const [newLeave, setNewLeave] = useState({
     leave_type: 'annual',
@@ -79,13 +83,29 @@ export const Leave: React.FC = () => {
           <h1 className="text-xl font-bold text-dark tracking-tight">Leave Management</h1>
           <p className="text-xs text-secondary mt-0.5">Apply for paid time off, track requests and manage approvals.</p>
         </div>
-        <button
-          onClick={() => setShowApplyModal(true)}
-          className="px-3.5 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover flex items-center gap-1.5 shadow-sm transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Apply for Leave</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-secondary" />
+            <span>Export Leave Report</span>
+          </button>
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5 text-secondary" />
+            <span>History</span>
+          </button>
+          <button
+            onClick={() => setShowApplyModal(true)}
+            className="px-3.5 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Apply for Leave</span>
+          </button>
+        </div>
       </div>
 
       {/* Leave Balance Overview Cards */}
@@ -331,6 +351,26 @@ export const Leave: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Custom Report Builder Modal */}
+      <CustomReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        initialReportType={user?.role === 'employee' ? 'my_leave_history' : 'leave_report'}
+        onOpenHistory={() => {
+          setShowReportModal(false);
+          setShowHistoryModal(true);
+        }}
+      />
+
+      {/* Export History Modal */}
+      <ExportHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        onOpenReportBuilder={() => {
+          setShowHistoryModal(false);
+          setShowReportModal(true);
+        }}
+      />
     </div>
   );
 };

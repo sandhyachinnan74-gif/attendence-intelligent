@@ -17,11 +17,15 @@ import {
   XCircle,
   AlertTriangle,
   RefreshCw,
-  Send
+  Send,
+  Download,
+  History
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Employee, Department } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { CustomReportModal } from '../components/reports/CustomReportModal';
+import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
 
 export const Employees: React.FC = () => {
   const { user } = useAuth();
@@ -46,6 +50,8 @@ export const Employees: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   // Reject modal state
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -202,6 +208,20 @@ export const Employees: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="px-3.5 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-secondary" />
+            <span>Export Employee Data</span>
+          </button>
+          <button
+            onClick={() => setShowHistoryModal(true)}
+            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+          >
+            <History className="w-3.5 h-3.5 text-secondary" />
+            <span>History</span>
+          </button>
           {canManageEmployees && (
             <button
               onClick={() => {
@@ -816,6 +836,26 @@ export const Employees: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Custom Report Builder Modal */}
+      <CustomReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        initialReportType="workforce_complete"
+        onOpenHistory={() => {
+          setShowReportModal(false);
+          setShowHistoryModal(true);
+        }}
+      />
+
+      {/* Export History Modal */}
+      <ExportHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        onOpenReportBuilder={() => {
+          setShowHistoryModal(false);
+          setShowReportModal(true);
+        }}
+      />
     </div>
   );
 };

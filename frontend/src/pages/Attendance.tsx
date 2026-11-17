@@ -13,12 +13,15 @@ import {
   Edit,
   X,
   RefreshCw,
+  History,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { AttendanceRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LiveClock } from '../components/common/LiveClock';
 import { downloadFile } from '../utils/download';
+import { CustomReportModal } from '../components/reports/CustomReportModal';
+import { ExportHistoryModal } from '../components/reports/ExportHistoryModal';
 
 export const Attendance: React.FC = () => {
   const { user } = useAuth();
@@ -31,6 +34,10 @@ export const Attendance: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+
+  // Report Modal states
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
 
   // Correction Modal
   const [correctingRecord, setCorrectingRecord] = useState<AttendanceRecord | null>(null);
@@ -157,18 +164,18 @@ export const Attendance: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => downloadFile(`/exports/attendance/csv${startDate ? `?start_date=${startDate}` : ''}${endDate ? `&end_date=${endDate}` : ''}`, 'attendai_attendance.csv')}
-            className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+            onClick={() => setShowReportModal(true)}
+            className="px-3.5 py-1.5 bg-primary text-white hover:bg-primary-hover rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5 text-secondary" />
-            <span>CSV Export</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>Export Attendance</span>
           </button>
           <button
-            onClick={() => downloadFile(`/exports/attendance/xlsx${startDate ? `?start_date=${startDate}` : ''}${endDate ? `&end_date=${endDate}` : ''}`, 'attendai_attendance.xlsx')}
+            onClick={() => setShowHistoryModal(true)}
             className="px-3 py-1.5 bg-white border border-border text-dark hover:bg-slate-50 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span>XLSX Export</span>
+            <History className="w-3.5 h-3.5 text-secondary" />
+            <span>History</span>
           </button>
         </div>
       </div>
@@ -465,6 +472,28 @@ export const Attendance: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Custom Report Builder Modal */}
+      <CustomReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        initialReportType={user?.role === 'employee' ? 'my_attendance_history' : 'attendance_org'}
+        initialStartDate={startDate}
+        initialEndDate={endDate}
+        onOpenHistory={() => {
+          setShowReportModal(false);
+          setShowHistoryModal(true);
+        }}
+      />
+
+      {/* Export History Modal */}
+      <ExportHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        onOpenReportBuilder={() => {
+          setShowHistoryModal(false);
+          setShowReportModal(true);
+        }}
+      />
     </div>
   );
 };

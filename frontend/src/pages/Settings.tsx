@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import {
   Settings as SettingsIcon,
@@ -162,7 +163,7 @@ export const Settings: React.FC = () => {
       {/* Header */}
       <div className="pb-4 border-b border-border">
         <h1 className="text-xl font-bold text-dark tracking-tight">
-          {role === 'admin' ? 'System Settings & Diagnostics' : 'Account & Personal Settings'}
+          {role === 'admin' ? 'Organization Settings & Administration' : 'Account & Personal Settings'}
         </h1>
         <p className="text-xs text-secondary mt-0.5">
           {role === 'admin'
@@ -177,31 +178,28 @@ export const Settings: React.FC = () => {
           <>
             <button
               onClick={() => handleTabChange('general')}
-              className={`px-4 py-2 font-semibold border-b-2 transition-colors ${
-                activeTab === 'general'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-secondary hover:text-dark'
-              }`}
+              className={`px-4 py-2 font-semibold border-b-2 transition-colors ${activeTab === 'general'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-secondary hover:text-dark'
+                }`}
             >
               Organization & Rules
             </button>
             <button
               onClick={() => handleTabChange('users')}
-              className={`px-4 py-2 font-semibold border-b-2 transition-colors ${
-                activeTab === 'users'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-secondary hover:text-dark'
-              }`}
+              className={`px-4 py-2 font-semibold border-b-2 transition-colors ${activeTab === 'users'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-secondary hover:text-dark'
+                }`}
             >
               User Management
             </button>
             <button
               onClick={() => handleTabChange('diagnostics')}
-              className={`px-4 py-2 font-semibold border-b-2 transition-colors ${
-                activeTab === 'diagnostics'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-secondary hover:text-dark'
-              }`}
+              className={`px-4 py-2 font-semibold border-b-2 transition-colors ${activeTab === 'diagnostics'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-secondary hover:text-dark'
+                }`}
             >
               System Diagnostics
             </button>
@@ -211,11 +209,10 @@ export const Settings: React.FC = () => {
         {(role === 'hr_manager' || role === 'employee') && (
           <button
             onClick={() => handleTabChange('profile')}
-            className={`px-4 py-2 font-semibold border-b-2 transition-colors ${
-              activeTab === 'profile' || activeTab === 'general'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-secondary hover:text-dark'
-            }`}
+            className={`px-4 py-2 font-semibold border-b-2 transition-colors ${activeTab === 'profile' || activeTab === 'general'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-secondary hover:text-dark'
+              }`}
           >
             My Profile
           </button>
@@ -223,22 +220,20 @@ export const Settings: React.FC = () => {
 
         <button
           onClick={() => handleTabChange('security')}
-          className={`px-4 py-2 font-semibold border-b-2 transition-colors ${
-            activeTab === 'security'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-secondary hover:text-dark'
-          }`}
+          className={`px-4 py-2 font-semibold border-b-2 transition-colors ${activeTab === 'security'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-secondary hover:text-dark'
+            }`}
         >
           Security & Password
         </button>
 
         <button
           onClick={() => handleTabChange('notifications')}
-          className={`px-4 py-2 font-semibold border-b-2 transition-colors ${
-            activeTab === 'notifications'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-secondary hover:text-dark'
-          }`}
+          className={`px-4 py-2 font-semibold border-b-2 transition-colors ${activeTab === 'notifications'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-secondary hover:text-dark'
+            }`}
         >
           Notifications
         </button>
@@ -470,9 +465,8 @@ export const Settings: React.FC = () => {
 
           {passwordMsg && (
             <div
-              className={`p-3 rounded-lg text-xs flex items-center gap-2 border ${
-                passwordMsg.error ? 'bg-red-50 text-danger border-red-200' : 'bg-emerald-50 text-success border-emerald-200'
-              }`}
+              className={`p-3 rounded-lg text-xs flex items-center gap-2 border ${passwordMsg.error ? 'bg-red-50 text-danger border-red-200' : 'bg-emerald-50 text-success border-emerald-200'
+                }`}
             >
               {passwordMsg.error ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle2 className="w-4 h-4 flex-shrink-0" />}
               <span>{passwordMsg.text}</span>
