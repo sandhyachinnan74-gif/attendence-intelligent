@@ -335,3 +335,30 @@ class NotificationPreference(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="notification_preferences")
+
+class EmployeeOnboardingRequest(Base):
+    __tablename__ = "employee_onboarding_requests"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    requested_by_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    employee_code = Column(String(50), nullable=False)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    email = Column(String(255), nullable=False)
+    phone = Column(String(50), nullable=True)
+    department_id = Column(String(36), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
+    designation = Column(String(100), nullable=True)
+    date_of_joining = Column(Date, nullable=False, default=date.today)
+    role = Column(String(50), nullable=False, default="employee")
+    status = Column(String(50), nullable=False, default="pending_approval")  # pending_approval, approved, rejected
+    reviewed_by_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    organization = relationship("Organization")
+    requested_by = relationship("User", foreign_keys=[requested_by_id])
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_id])
+    department = relationship("Department")

@@ -2,7 +2,8 @@ import os
 import shutil
 import uuid
 from typing import List, Optional
-from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, status
+from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, status, Response
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from app.core.database import get_db
@@ -101,6 +102,82 @@ async def search_policies(
         limit=limit
     )
     return results
+
+@router.get("/{policy_id}")
+async def get_policy_detail(
+    policy_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Policy).where(
+        and_(
+            Policy.id == policy_id,
+            Policy.organization_id == user.organization_id
+        )
+    )
+    policy = (await db.execute(stmt)).scalars().first()
+    if not policy:
+        raise NotFoundException("Policy document not found")
+
+    chunks_stmt = select(PolicyChunk).where(PolicyChunk.policy_id == policy.id).order_by(PolicyChunk.chunk_index.asc())
+    chunks = (await db.execute(chunks_stmt)).scalars().all()
+
+    return {
+        "id": policy.id,
+        "title": policy.title,
+        "category": policy.category,
+        "file_path": policy.file_path,
+        "file_size": policy.file_size,
+        "status": policy.status,
+        "chunk_count": len(chunks),
+        "created_at": policy.created_at,
+        "chunks": [
+            {
+                "id": c.id,
+                "chunk_index": c.chunk_index,
+                "page_number": c.page_number,
+                "section": c.section,
+                "content": c.content,
+                "token_count": c.token_count
+            }
+            for c in chunks
+        ]
+    }
+
+@router.get("/{policy_id}/download")
+async def download_policy(
+    policy_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(Policy).where(
+        and_(
+            Policy.id == policy_id,
+            Policy.organization_id == user.organization_id
+        )
+    )
+    policy = (await db.execute(stmt)).scalars().first()
+    if not policy:
+        raise NotFoundException("Policy document not found")
+
+    if not policy.file_path or not os.path.exists(policy.file_path):
+        chunks_stmt = select(PolicyChunk).where(PolicyChunk.policy_id == policy.id).order_by(PolicyChunk.chunk_index.asc())
+        chunks = (await db.execute(chunks_stmt)).scalars().all()
+        full_text = "\n\n".join([f"--- Page {c.page_number} ({c.section}) ---\n{c.content}" for c in chunks])
+        return Response(
+            content=full_text.encode("utf-8"),
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{policy.title}.txt"'}
+        )
+
+    ext = os.path.splitext(policy.file_path)[1].lower()
+    media_type = "application/pdf" if ext == ".pdf" else "application/octet-stream"
+
+    return FileResponse(
+        path=policy.file_path,
+        filename=f"{policy.title}{ext}",
+        media_type=media_type
+    )
 
 @router.delete("/{policy_id}")
 async def delete_policy(

@@ -111,6 +111,45 @@ class EmployeeResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class EmployeeOnboardingRequestCreate(BaseModel):
+    employee_code: str
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    department_id: Optional[str] = None
+    designation: str
+    date_of_joining: Optional[date] = None
+    role: Optional[str] = "employee"
+
+class EmployeeOnboardingReview(BaseModel):
+    status: str  # approved, rejected
+    rejection_reason: Optional[str] = None
+
+class EmployeeOnboardingResponse(BaseModel):
+    id: str
+    organization_id: str
+    requested_by_id: Optional[str] = None
+    requested_by_name: Optional[str] = None
+    employee_code: str
+    first_name: str
+    last_name: str
+    email: str
+    phone: Optional[str] = None
+    department_id: Optional[str] = None
+    department_name: Optional[str] = None
+    designation: Optional[str] = None
+    date_of_joining: date
+    role: str
+    status: str
+    reviewed_by_id: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # ----------------- Shift -----------------
 class ShiftCreate(BaseModel):
     name: str

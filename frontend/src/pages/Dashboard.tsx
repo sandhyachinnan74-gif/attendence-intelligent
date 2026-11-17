@@ -188,6 +188,15 @@ export const Dashboard: React.FC = () => {
   // RENDER: EMPLOYEE DASHBOARD
   // -------------------------------------------------------------------------
   if (user?.role === 'employee') {
+    if (loading && !employeeData) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+          <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-sm font-medium text-secondary">Loading personal workforce portal...</p>
+        </div>
+      );
+    }
+
     const kpis = employeeData?.kpis || {};
     const todayRec = employeeData?.today_record;
     const shift = employeeData?.assigned_shift;
@@ -196,8 +205,8 @@ export const Dashboard: React.FC = () => {
     const announcements = employeeData?.company_announcements || [];
     const leaveSummary = employeeData?.leave_summary || {};
 
-    const isClockedIn = Boolean(todayRec?.clock_in);
-    const isClockedOut = Boolean(todayRec?.clock_out);
+    const isClockedIn = Boolean(todayRec?.clock_in && !todayRec?.clock_out);
+    const isClockedOut = Boolean(todayRec?.clock_in && todayRec?.clock_out);
     const hasOpenBreak = Boolean(todayRec?.has_open_break);
 
     return (
@@ -213,6 +222,22 @@ export const Dashboard: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => downloadFile('/exports/attendance/csv', 'my_attendance.csv')}
+              className="px-2.5 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+              title="Download My Attendance CSV"
+            >
+              <Download className="w-3.5 h-3.5 text-secondary" />
+              <span>CSV</span>
+            </button>
+            <button
+              onClick={() => downloadFile('/exports/attendance/xlsx', 'my_attendance.xlsx')}
+              className="px-2.5 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-medium hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+              title="Download My Attendance XLSX"
+            >
+              <Download className="w-3.5 h-3.5 text-secondary" />
+              <span>XLSX</span>
+            </button>
             <button
               onClick={fetchEmployeeDashboard}
               disabled={loading}
@@ -681,10 +706,17 @@ export const Dashboard: React.FC = () => {
           </button>
           <button
             onClick={() => downloadFile('/exports/attendance/csv', 'attendai_attendance.csv')}
+            className="px-3 py-1.5 bg-white border border-border rounded-lg text-xs font-medium text-dark hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-secondary" />
+            <span>Export CSV</span>
+          </button>
+          <button
+            onClick={() => downloadFile('/exports/attendance/xlsx', 'attendai_attendance.xlsx')}
             className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
+            <span>Export XLSX</span>
           </button>
         </div>
       </div>

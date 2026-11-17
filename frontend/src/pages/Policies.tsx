@@ -1,18 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { Upload, FileText, Search, Trash2, BookOpen, CheckCircle, ExternalLink, X } from 'lucide-react';
+import { Upload, FileText, Search, Trash2, BookOpen, CheckCircle, ExternalLink, X, Download, FileDown, Eye } from 'lucide-react';
 import { api } from '../services/api';
 import { Policy, PolicyChunk } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { downloadFile } from '../utils/download';
 
 export const Policies: React.FC = () => {
   const { user } = useAuth();
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Search
+  // Search across policies
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<PolicyChunk[]>([]);
   const [searching, setSearching] = useState(false);
+
+  // Document Reader state
+  const [selectedPolicy, setSelectedPolicy] = useState<any | null>(null);
+  const [readingPolicy, setReadingPolicy] = useState(false);
+  const [docSearch, setDocSearch] = useState('');
 
   // Upload modal
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -36,6 +42,19 @@ export const Policies: React.FC = () => {
   useEffect(() => {
     fetchPolicies();
   }, []);
+
+  const handleOpenDocument = async (id: string) => {
+    setReadingPolicy(true);
+    setDocSearch('');
+    try {
+      const res = await api.get(`/policies/${id}`);
+      setSelectedPolicy(res.data);
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Failed to load document content');
+    } finally {
+      setReadingPolicy(false);
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +99,9 @@ export const Policies: React.FC = () => {
     if (!confirm('Are you sure you want to delete this policy and all its indexed chunks?')) return;
     try {
       await api.delete(`/policies/${id}`);
+      if (selectedPolicy?.id === id) {
+        setSelectedPolicy(null);
+      }
       fetchPolicies();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Failed to delete policy');
@@ -88,6 +110,15 @@ export const Policies: React.FC = () => {
 
   const canUpload = user?.role === 'admin' || user?.role === 'hr_manager';
 
+  const filteredChunks = selectedPolicy?.chunks?.filter((c: any) => {
+    if (!docSearch.trim()) return true;
+    const q = docSearch.toLowerCase();
+    return (
+      (c.content && c.content.toLowerCase().includes(q)) ||
+      (c.section && c.section.toLowerCase().includes(q))
+    );
+  }) || [];
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -95,7 +126,7 @@ export const Policies: React.FC = () => {
         <div>
           <h1 className="text-xl font-bold text-dark tracking-tight">Policies & Guidelines</h1>
           <p className="text-xs text-secondary mt-0.5">
-            Full-text policy repository with PyMuPDF/python-docx indexing and page citations.
+            Full-text policy repository with PyMuPDF/python-docx indexing, search citations, and document reading.
           </p>
         </div>
         {canUpload && (
@@ -163,8 +194,12 @@ export const Policies: React.FC = () => {
 
       {/* Uploaded Documents List */}
       <div className="bg-card border border-border rounded-xl shadow-card overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border">
-          <h2 className="text-sm font-bold text-dark">Indexed Policy Documents</h2>
+        <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-dark">Indexed Policy Documents</h2>
+            <p className="text-xs text-secondary mt-0.5">Click any document to read its full contents or download a copy.</p>
+          </div>
+          <span className="text-xs text-secondary font-medium">{policies.length} Documents</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -174,9 +209,9 @@ export const Policies: React.FC = () => {
                 <th className="py-3 px-4">Document Title</th>
                 <th className="py-3 px-4">Category</th>
                 <th className="py-3 px-4">File Size</th>
-                <th className="py-3 px-4">Chunks</th>
+                <th className="py-3 px-4">Indexed Pages</th>
                 <th className="py-3 px-4">Status</th>
-                {canUpload && <th className="py-3 px-4 text-right">Action</th>}
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border font-medium">
@@ -196,31 +231,54 @@ export const Policies: React.FC = () => {
                 policies.map((p) => (
                   <tr key={p.id} className="hover:bg-slate-50/60 transition-colors">
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-2.5">
-                        <FileText className="w-4 h-4 text-primary flex-shrink-0" />
-                        <span className="font-semibold text-dark">{p.title}</span>
-                      </div>
+                      <button
+                        onClick={() => handleOpenDocument(p.id)}
+                        className="flex items-center gap-2.5 text-left group"
+                        title="Click to read document"
+                      >
+                        <FileText className="w-4 h-4 text-primary flex-shrink-0 group-hover:scale-110 transition-transform" />
+                        <span className="font-semibold text-dark group-hover:text-primary transition-colors underline decoration-transparent group-hover:decoration-primary">
+                          {p.title}
+                        </span>
+                      </button>
                     </td>
                     <td className="py-3 px-4 text-secondary">{p.category}</td>
                     <td className="py-3 px-4 font-mono text-secondary">{Math.round(p.file_size / 1024)} KB</td>
-                    <td className="py-3 px-4 font-mono text-dark">{p.chunk_count} chunks</td>
+                    <td className="py-3 px-4 font-mono text-dark">{p.chunk_count} pages/chunks</td>
                     <td className="py-3 px-4">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-success border border-emerald-200 capitalize">
                         <CheckCircle className="w-3 h-3" />
                         <span>{p.status}</span>
                       </span>
                     </td>
-                    {canUpload && (
-                      <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => handleDeletePolicy(p.id)}
-                          className="p-1 rounded text-secondary hover:text-danger transition-colors"
-                          title="Delete Policy"
+                          onClick={() => handleOpenDocument(p.id)}
+                          className="px-2.5 py-1 bg-white border border-border text-dark rounded-md text-xs font-medium hover:bg-slate-50 flex items-center gap-1 shadow-xs transition-colors"
+                          title="Read Document Content"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <BookOpen className="w-3.5 h-3.5 text-primary" />
+                          <span>Read</span>
                         </button>
-                      </td>
-                    )}
+                        <button
+                          onClick={() => downloadFile(`/policies/${p.id}/download`, `${p.title}.pdf`)}
+                          className="p-1 rounded text-secondary hover:text-dark hover:bg-slate-100 transition-colors"
+                          title="Download Document"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                        {canUpload && (
+                          <button
+                            onClick={() => handleDeletePolicy(p.id)}
+                            className="p-1 rounded text-secondary hover:text-danger hover:bg-rose-50 transition-colors"
+                            title="Delete Policy"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -228,6 +286,112 @@ export const Policies: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Document Reader Modal */}
+      {selectedPolicy && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-border rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-border bg-slate-50/75 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-dark">{selectedPolicy.title}</h3>
+                  <div className="flex items-center gap-2 text-xs text-secondary mt-0.5">
+                    <span className="px-2 py-0.2 bg-white border border-border rounded text-[10px] font-semibold">
+                      {selectedPolicy.category}
+                    </span>
+                    <span>&bull;</span>
+                    <span>{selectedPolicy.chunks?.length || 0} indexed sections</span>
+                    <span>&bull;</span>
+                    <span>{Math.round((selectedPolicy.file_size || 0) / 1024)} KB</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => downloadFile(`/policies/${selectedPolicy.id}/download`, `${selectedPolicy.title}.pdf`)}
+                  className="px-3 py-1.5 bg-white border border-border text-dark rounded-lg text-xs font-semibold hover:bg-slate-50 flex items-center gap-1.5 shadow-xs"
+                >
+                  <Download className="w-3.5 h-3.5 text-secondary" />
+                  <span>Download File</span>
+                </button>
+                <button
+                  onClick={() => setSelectedPolicy(null)}
+                  className="p-1.5 rounded-lg text-secondary hover:text-dark hover:bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Document Content Search Filter */}
+            <div className="px-6 py-3 border-b border-border/80 bg-white flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-secondary" />
+                <input
+                  type="text"
+                  placeholder="Filter sections within this document..."
+                  value={docSearch}
+                  onChange={(e) => setDocSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-border rounded-lg text-dark focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+              <span className="text-xs text-secondary flex-shrink-0">
+                Showing {filteredChunks.length} of {selectedPolicy.chunks?.length || 0} sections
+              </span>
+            </div>
+
+            {/* Reader Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/40">
+              {filteredChunks.length === 0 ? (
+                <div className="text-center py-12 text-secondary text-xs">
+                  No sections match "{docSearch}".
+                </div>
+              ) : (
+                filteredChunks.map((chunk: any, idx: number) => (
+                  <div
+                    key={chunk.id || idx}
+                    className="bg-white border border-border rounded-xl p-5 shadow-xs space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-primary/10 text-primary font-mono font-bold text-[10px] rounded">
+                          Page {chunk.page_number}
+                        </span>
+                        <span className="font-bold text-xs text-dark">
+                          {chunk.section || `Section ${idx + 1}`}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-secondary font-mono">
+                        {chunk.token_count} tokens
+                      </span>
+                    </div>
+
+                    <div className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap font-sans">
+                      {chunk.content}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3 border-t border-border bg-slate-50 flex items-center justify-between text-xs text-secondary">
+              <span>AttendAI Document Parser &bull; PyMuPDF / python-docx</span>
+              <button
+                onClick={() => setSelectedPolicy(null)}
+                className="px-4 py-1.5 bg-white border border-border rounded-lg font-medium text-dark hover:bg-slate-100"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload Modal */}
       {showUploadModal && (

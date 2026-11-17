@@ -43,9 +43,14 @@ async def test_exports_endpoints():
         assert query_csv_res.status_code == 200
         assert "Date,Employee Code,Employee Name" in query_csv_res.text
 
-        # 6. Test Employee Role Forbidden
+        # 6. Test Employee Scoped Export (Personal Records)
         emp_csv_res = await ac.get("/api/v1/exports/attendance/csv", headers=emp_headers)
-        assert emp_csv_res.status_code == 403
+        assert emp_csv_res.status_code == 200
+        assert "my_attendance" in emp_csv_res.headers["content-disposition"]
+
+        emp_xlsx_res = await ac.get("/api/v1/exports/attendance/xlsx", headers=emp_headers)
+        assert emp_xlsx_res.status_code == 200
+        assert "my_attendance" in emp_xlsx_res.headers["content-disposition"]
 
         # 7. Test Anonymous Unauthorized
         anon_res = await ac.get("/api/v1/exports/attendance/csv")

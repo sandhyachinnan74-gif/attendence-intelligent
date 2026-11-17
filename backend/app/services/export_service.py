@@ -1,14 +1,20 @@
 import io
 import csv
 from datetime import date
-from typing import List
+from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.models.models import AttendanceRecord, Employee, Department
 
 class ExportService:
     @staticmethod
-    async def export_attendance_csv(db: AsyncSession, organization_id: str, start_date: date, end_date: date) -> io.StringIO:
+    async def export_attendance_csv(
+        db: AsyncSession,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+        employee_id: Optional[str] = None
+    ) -> io.StringIO:
         stmt = (
             select(AttendanceRecord, Employee, Department)
             .join(Employee, Employee.id == AttendanceRecord.employee_id)
@@ -22,6 +28,9 @@ class ExportService:
             )
             .order_by(AttendanceRecord.date.desc())
         )
+        if employee_id:
+            stmt = stmt.where(AttendanceRecord.employee_id == employee_id)
+
         results = (await db.execute(stmt)).all()
 
         output = io.StringIO()
@@ -50,7 +59,13 @@ class ExportService:
         return output
 
     @staticmethod
-    async def export_attendance_xlsx(db: AsyncSession, organization_id: str, start_date: date, end_date: date) -> io.BytesIO:
+    async def export_attendance_xlsx(
+        db: AsyncSession,
+        organization_id: str,
+        start_date: date,
+        end_date: date,
+        employee_id: Optional[str] = None
+    ) -> io.BytesIO:
         import openpyxl
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -75,6 +90,8 @@ class ExportService:
             )
             .order_by(AttendanceRecord.date.desc())
         )
+        if employee_id:
+            stmt = stmt.where(AttendanceRecord.employee_id == employee_id)
         results = (await db.execute(stmt)).all()
 
         for r, emp, dept in results:

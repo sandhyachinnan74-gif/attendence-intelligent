@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.core.exceptions import UnauthorizedException, ForbiddenException
-from app.models.models import User
+from app.models.models import User, Employee
 from app.services.export_service import ExportService
 
 router = APIRouter(prefix="/exports", tags=["Exports"])
@@ -39,29 +39,37 @@ async def get_export_user(
     if not user or not user.is_active:
         raise UnauthorizedException("User account is inactive or not found")
 
-    if user.role not in ["admin", "hr_manager"]:
-        raise ForbiddenException("Requires HR Manager or Administrator privileges")
-
     return user
 
 @router.get("/attendance/csv")
 async def export_attendance_csv(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    employee_id: Optional[str] = None,
     user: User = Depends(get_export_user),
     db: AsyncSession = Depends(get_db)
 ):
     s_date = start_date or (date.today() - timedelta(days=30))
     e_date = end_date or date.today()
 
+    target_emp_id = None
+    if user.role == "employee":
+        emp_stmt = select(Employee).where(Employee.user_id == user.id)
+        emp = (await db.execute(emp_stmt)).scalars().first()
+        target_emp_id = emp.id if emp else "__not_found__"
+        filename = f"my_attendance_{s_date}_{e_date}.csv"
+    else:
+        target_emp_id = employee_id
+        filename = f"attendai_attendance_{s_date}_{e_date}.csv"
+
     csv_stream = await ExportService.export_attendance_csv(
         db=db,
         organization_id=user.organization_id,
         start_date=s_date,
-        end_date=e_date
+        end_date=e_date,
+        employee_id=target_emp_id
     )
 
-    filename = f"attendai_attendance_{s_date}_{e_date}.csv"
     content = csv_stream.getvalue().encode("utf-8")
     return Response(
         content=content,
@@ -78,20 +86,31 @@ async def export_attendance_csv(
 async def export_attendance_xlsx(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    employee_id: Optional[str] = None,
     user: User = Depends(get_export_user),
     db: AsyncSession = Depends(get_db)
 ):
     s_date = start_date or (date.today() - timedelta(days=30))
     e_date = end_date or date.today()
 
+    target_emp_id = None
+    if user.role == "employee":
+        emp_stmt = select(Employee).where(Employee.user_id == user.id)
+        emp = (await db.execute(emp_stmt)).scalars().first()
+        target_emp_id = emp.id if emp else "__not_found__"
+        filename = f"my_attendance_{s_date}_{e_date}.xlsx"
+    else:
+        target_emp_id = employee_id
+        filename = f"attendai_attendance_{s_date}_{e_date}.xlsx"
+
     xlsx_stream = await ExportService.export_attendance_xlsx(
         db=db,
         organization_id=user.organization_id,
         start_date=s_date,
-        end_date=e_date
+        end_date=e_date,
+        employee_id=target_emp_id
     )
 
-    filename = f"attendai_attendance_{s_date}_{e_date}.xlsx"
     content = xlsx_stream.getvalue()
     return Response(
         content=content,
