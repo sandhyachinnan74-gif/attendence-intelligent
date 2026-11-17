@@ -1,0 +1,54 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from '../context/AuthContext';
+import { AppLayout } from '../components/layout/AppLayout';
+import { Login } from '../pages/Login';
+import { Dashboard } from '../pages/Dashboard';
+import { Employees } from '../pages/Employees';
+import { Attendance } from '../pages/Attendance';
+import { Shifts } from '../pages/Shifts';
+import { Leave } from '../pages/Leave';
+import { Anomalies } from '../pages/Anomalies';
+import { AIAssistant } from '../pages/AIAssistant';
+import { Policies } from '../pages/Policies';
+import { Analytics } from '../pages/Analytics';
+import { Settings } from '../pages/Settings';
+import { HelpSupport } from '../pages/HelpSupport';
+import { NotFoundPage } from '../pages/errors/NotFoundPage';
+import { ForbiddenPage } from '../pages/errors/ForbiddenPage';
+import { ServerErrorPage } from '../pages/errors/ServerErrorPage';
+
+export const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+
+          {/* Protected Application Routes */}
+          <Route path="/" element={<AppLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="employees" element={<Employees />} />
+            <Route path="attendance" element={<Attendance />} />
+            <Route path="shifts" element={<Shifts />} />
+            <Route path="leave" element={<Leave />} />
+            <Route path="anomalies" element={<Anomalies />} />
+            <Route path="ai" element={<AIAssistant />} />
+            <Route path="policies" element={<Policies />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="help" element={<HelpSupport />} />
+            <Route path="403" element={<ForbiddenPage />} />
+            <Route path="500" element={<ServerErrorPage />} />
+          </Route>
+
+          {/* 404 Route */}
+          <Route path="/404" element={<NotFoundPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+};
+
+export default App;

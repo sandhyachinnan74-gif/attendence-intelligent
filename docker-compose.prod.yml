@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-attendai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-attendai}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2048M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U attendai -d attendai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - attendai-prod-net
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_prod_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - attendai-prod-net
+
+  backend_1:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-attendai}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-attendai}
+      USE_SQLITE_FALLBACK: "false"
+      REDIS_URL: redis://redis:6379/0
+      USE_FAKEREDIS_FALLBACK: "false"
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-nvidia}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendai-prod-net
+
+  backend_2:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-attendai}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-attendai}
+      USE_SQLITE_FALLBACK: "false"
+      REDIS_URL: redis://redis:6379/0
+      USE_FAKEREDIS_FALLBACK: "false"
+      SECRET_KEY: ${SECRET_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-nvidia}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - attendai-prod-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    networks:
+      - attendai-prod-net
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend_1
+      - backend_2
+      - frontend
+    networks:
+      - attendai-prod-net
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+
+networks:
+  attendai-prod-net:
+    driver: bridge
