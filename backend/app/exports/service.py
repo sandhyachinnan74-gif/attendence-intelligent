@@ -110,8 +110,8 @@ class ExportService:
         )
 
         fmt = req.format.lower().strip()
-        if fmt not in ["csv", "xlsx", "pdf"]:
-            raise ValidationException("Unsupported format. Allowed formats: csv, xlsx, pdf.")
+        if fmt not in ["csv", "xlsx"]:
+            raise ValidationException("Unsupported format. Allowed formats: csv, xlsx.")
 
         # Organization Name
         org_name = "AttendAI Global Technologies"
@@ -123,7 +123,7 @@ class ExportService:
         if fmt == "csv":
             file_bytes = generate_csv_bytes(rows, selected_cols)
             ext = "csv"
-        elif fmt == "xlsx":
+        else: # xlsx
             split_dept = (req.scope_type in ["organization", "multi_department", "multiple_departments"])
             file_bytes = generate_excel_bytes(
                 rows=rows,
@@ -136,17 +136,6 @@ class ExportService:
                 split_by_department=split_dept
             )
             ext = "xlsx"
-        else: # pdf
-            file_bytes = generate_pdf_bytes(
-                rows=rows,
-                columns=selected_cols,
-                report_title=report_title,
-                scope_summary=meta["scope_summary"],
-                start_date=str(start_d),
-                end_date=str(end_d),
-                organization_name=org_name
-            )
-            ext = "pdf"
 
         # Create persistent export record with meaningful filename
         clean_title = "".join(c for c in report_title.replace(" ", "_") if c.isalnum() or c == "_")

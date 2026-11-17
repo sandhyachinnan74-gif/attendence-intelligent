@@ -118,8 +118,7 @@ async def get_export_config(
         ],
         "formats": [
             {"id": "xlsx", "label": "Excel Workbook (.xlsx)", "desc": "Structured workbook with summary stats and multi-department tabs"},
-            {"id": "csv", "label": "CSV Document (.csv)", "desc": "Clean UTF-8 spreadsheet for tabular data analysis"},
-            {"id": "pdf", "label": "Printable PDF (.pdf)", "desc": "Executive document with table styling and page numbering"}
+            {"id": "csv", "label": "CSV Document (.csv)", "desc": "Clean UTF-8 spreadsheet for tabular data analysis"}
         ]
     }
 

@@ -38,6 +38,9 @@ async def test_exports_config_role_scoping(tokens):
         assert len(data_admin["report_types"]) >= 10
         assert len(data_admin["departments"]) > 0
         assert len(data_admin["employees"]) > 0
+        # Verify PDF is excluded from formats
+        assert all(f["id"] != "pdf" for f in data_admin["formats"])
+        assert set(f["id"] for f in data_admin["formats"]) == {"csv", "xlsx"}
 
         # 2. Employee Config
         res_emp = await ac.get("/api/v1/exports/config", headers={"Authorization": f"Bearer {tokens['employee']}"})
@@ -52,7 +55,16 @@ async def test_admin_generate_csv_xlsx_pdf(tokens):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         headers = {"Authorization": f"Bearer {tokens['admin']}"}
 
-        for fmt in ["csv", "xlsx", "pdf"]:
+        # PDF format is now disallowed from exports
+        disallowed_pdf = await ac.post("/api/v1/exports/generate", json={
+            "report_type": "attendance_org",
+            "scope_type": "organization",
+            "date_preset": "last_30_days",
+            "format": "pdf"
+        }, headers=headers)
+        assert disallowed_pdf.status_code in [400, 422], "PDF must be disallowed from exports"
+
+        for fmt in ["csv", "xlsx"]:
             # Preview
             prev_res = await ac.post("/api/v1/exports/preview", json={
                 "report_type": "attendance_org",
@@ -86,8 +98,6 @@ async def test_admin_generate_csv_xlsx_pdf(tokens):
                 wb = openpyxl.load_workbook(io.BytesIO(dl_res.content))
                 assert "Report Summary" in wb.sheetnames
                 assert "All Records" in wb.sheetnames
-            elif fmt == "pdf":
-                assert dl_res.content.startswith(b"%PDF")
             elif fmt == "csv":
                 assert len(dl_res.text.strip().split("\n")) >= 1
 

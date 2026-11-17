@@ -644,3 +644,29 @@ If you ever restart your machine, run:
    - Structured text view for DOCX rendering styled headings, paragraphs, and formatted data tables.
    - Live content search filter with matching element counter.
    - Non-blocking toast notifications replacing native `alert()` dialogs.
+
+
+---
+
+## 14. Download Utility Hardening & PDF Export Removal (Nov 17, 2026)
+
+### A. Download Button Hardening
+1. **Root Cause**:
+   - `api.defaults.baseURL` is configured as `/api/v1` in `frontend/src/services/api.ts`.
+   - Backend endpoints returned `download_url` prefixed with `/api/v1` (e.g. `/api/v1/exports/{id}/download`). When passed to Axios, it concatenated the paths to `/api/v1/api/v1/exports/{id}/download`, causing HTTP 404 errors.
+   - Synchronous `window.URL.revokeObjectURL(downloadUrl)` was called immediately after `tempLink.click()`, revoking the Blob URL in Chromium browsers before the download could be flushed to disk.
+2. **Fix Implemented in `src/utils/download.ts`**:
+   - Added automatic URL normalization: automatically strips redundant `/api/v1` prefixes so requests route cleanly.
+   - Delayed `window.URL.revokeObjectURL()` by 10 seconds via asynchronous timer to guarantee the browser's download manager has started streaming.
+   - Added automatic fallback to direct link streaming with query parameter `?token=` if Blob download encounters cross-origin or buffer errors.
+
+### B. Removal of PDF Format from Custom Exports
+1. **Backend**:
+   - Updated `GET /api/v1/exports/config`: excluded `pdf` from available formats list (`formats` now only exposes `xlsx` and `csv`).
+   - Updated `schemas.py`: `supported_formats = ["csv", "xlsx"]`.
+   - Updated `service.py`: restricted validation to `["csv", "xlsx"]`.
+2. **Frontend**:
+   - Updated `frontend/src/components/reports/CustomReportModal.tsx`:
+     - Removed the PDF format card from Step 4.
+     - Adjusted layout to a 2-column format card grid for CSV and Excel.
+     - Updated format state type to `'csv' | 'xlsx'`.

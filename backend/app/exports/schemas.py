@@ -16,7 +16,7 @@ class ReportTypeMetadata(BaseModel):
     allowed_roles: List[str]
     default_columns: List[str]
     available_columns: List[ColumnDefinition]
-    supported_formats: List[str] = ["csv", "xlsx", "pdf"]
+    supported_formats: List[str] = ["csv", "xlsx"]
 
 class ReportPreviewRequest(BaseModel):
     report_type: str
@@ -28,7 +28,7 @@ class ReportPreviewRequest(BaseModel):
     end_date: Optional[date] = None
     columns: Optional[List[str]] = None
     filters: Optional[Dict[str, Any]] = None
-    format: str = "xlsx"  # csv, xlsx, pdf
+    format: str = "xlsx"  # csv, xlsx
 
 class ReportPreviewResponse(BaseModel):
     report_type: str

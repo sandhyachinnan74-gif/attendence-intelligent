@@ -3,7 +3,6 @@ import {
   X,
   FileSpreadsheet,
   FileText,
-  Printer,
   ChevronRight,
   ChevronLeft,
   Check,
@@ -84,7 +83,7 @@ export const CustomReportModal: React.FC<CustomReportModalProps> = ({
   const [minOvertimeHours, setMinOvertimeHours] = useState<string>('');
 
   // Step 4: Format
-  const [format, setFormat] = useState<'csv' | 'xlsx' | 'pdf'>('xlsx');
+  const [format, setFormat] = useState<'csv' | 'xlsx'>('xlsx');
 
   // Step 5: Columns
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -767,11 +766,11 @@ export const CustomReportModal: React.FC<CustomReportModalProps> = ({
                   <div>
                     <h3 className="text-sm font-bold text-dark">Step 4 — Select File Format</h3>
                     <p className="text-xs text-secondary mt-0.5">
-                      Choose the preferred document output format. All three options generate authentic, production files.
+                      Choose the preferred document output format. Both options generate authentic, production files.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                     {/* CSV Card */}
                     <div
                       onClick={() => setFormat('csv')}
@@ -811,27 +810,6 @@ export const CustomReportModal: React.FC<CustomReportModalProps> = ({
                       </p>
                       <span className="inline-block mt-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
                         Formatted Workbook
-                      </span>
-                    </div>
-
-                    {/* PDF Card */}
-                    <div
-                      onClick={() => setFormat('pdf')}
-                      className={`p-5 rounded-2xl border cursor-pointer transition-all ${
-                        format === 'pdf'
-                          ? 'bg-rose-50/70 border-rose-500 shadow-md ring-2 ring-rose-500/20'
-                          : 'bg-white border-border hover:border-slate-300 hover:shadow-xs'
-                      }`}
-                    >
-                      <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center mb-3">
-                        <Printer className="w-6 h-6" />
-                      </div>
-                      <h4 className="text-sm font-bold text-dark">PDF (.pdf)</h4>
-                      <p className="text-xs text-secondary mt-1 leading-relaxed">
-                        Printable, professionally formatted report. Executive document with ReportLab tables, headers and page numbers.
-                      </p>
-                      <span className="inline-block mt-3 px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800">
-                        Printable Document
                       </span>
                     </div>
                   </div>
