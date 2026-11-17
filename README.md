@@ -1,7 +1,6 @@
 # AttendAI
 ### Intelligent Workforce. Smarter Decisions.
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7.svg?logo=render&logoColor=white)](https://attend-ai-yne6.onrender.com)
 [![Python](https://img.shields.io/badge/Python-3.12-blue.svg?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-1.0.0-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
@@ -10,8 +9,6 @@
 [![NVIDIA NIM](https://img.shields.io/badge/NVIDIA%20NIM-Mistral%20Large%204-76B900.svg?logo=nvidia&logoColor=white)](https://build.nvidia.com)
 [![Groq](https://img.shields.io/badge/Groq-GPT--OSS--120B-F55036.svg)](https://groq.com)
 [![Tests](https://img.shields.io/badge/Pytest-85%2F85%20Passed%20(100%25)-brightgreen.svg)]()
-
-> 🚀 **Live Production Application:** [https://attend-ai-yne6.onrender.com](https://attend-ai-yne6.onrender.com)
 
 AttendAI is a production-grade, AI-powered workforce time-and-attendance management platform engineered with a Dayforce-inspired enterprise user experience. It unifies deterministic attendance calculation, unsupervised machine learning anomaly detection, grounded tool-augmented AI orchestrations, in-browser policy document extraction, and a custom report builder.
 
@@ -360,8 +357,6 @@ DayForce/
 ---
 
 ## 14. Quickstart & Installation
-
-> 🌐 **Try the Live Cloud Deployment:** Access AttendAI online without installing anything locally at [https://attend-ai-yne6.onrender.com](https://attend-ai-yne6.onrender.com).
 
 ### Option A: Launch with Docker Compose (Recommended)
 ```bash

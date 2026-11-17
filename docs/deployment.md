@@ -1,7 +1,5 @@
 # AttendAI — Production Deployment & Infrastructure Guide
 
-> 🚀 **Live Production Deployment:** [https://attend-ai-yne6.onrender.com](https://attend-ai-yne6.onrender.com)
-
 This document describes the production deployment topology, Docker containerization, Nginx load balancing, and operational disaster recovery procedures for AttendAI.
 
 ---
