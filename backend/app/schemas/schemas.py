@@ -337,6 +337,9 @@ class DashboardKPIs(BaseModel):
     late_arrivals: int
     overtime_hours: float
     attendance_rate: float
+    employees_on_leave: Optional[int] = 0
+    pending_approvals: Optional[int] = 0
+    pending_corrections: Optional[int] = 0
     comparison: Dict[str, float]
 
 class AttendanceTrendItem(BaseModel):
@@ -359,3 +362,66 @@ class DashboardResponse(BaseModel):
     needs_attention: List[Dict[str, Any]]
     recent_activity: List[Dict[str, Any]]
     ai_insights: List[Dict[str, Any]]
+    leave_distribution: Optional[List[Dict[str, Any]]] = []
+    overtime_distribution: Optional[List[Dict[str, Any]]] = []
+    absenteeism_trends: Optional[List[Dict[str, Any]]] = []
+    shift_overview: Optional[List[Dict[str, Any]]] = []
+
+class EmployeeDashboardResponse(BaseModel):
+    kpis: Dict[str, Any]
+    today_record: Optional[Dict[str, Any]] = None
+    assigned_shift: Optional[Dict[str, Any]] = None
+    recent_punches: List[Dict[str, Any]] = []
+    leave_summary: Dict[str, Any] = {}
+    attendance_trends: List[Dict[str, Any]] = []
+    company_announcements: List[Dict[str, Any]] = []
+
+# ----------------- Notifications -----------------
+class NotificationResponse(BaseModel):
+    id: str
+    organization_id: str
+    user_id: str
+    title: str
+    message: str
+    category: str
+    priority: str
+    link: Optional[str] = None
+    is_read: bool
+    is_archived: bool
+    created_at: datetime
+    time_ago: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class NotificationListResponse(BaseModel):
+    items: List[NotificationResponse]
+    total: int
+    unread_count: int
+    page: int
+    page_size: int
+
+class NotificationPreferenceResponse(BaseModel):
+    email_enabled: bool
+    in_app_enabled: bool
+    categories: Dict[str, bool]
+
+    class Config:
+        from_attributes = True
+
+class NotificationPreferenceUpdate(BaseModel):
+    email_enabled: Optional[bool] = None
+    in_app_enabled: Optional[bool] = None
+    categories: Optional[Dict[str, bool]] = None
+
+# ----------------- Global Search -----------------
+class SearchResultGroup(BaseModel):
+    query: str
+    total_results: int
+    employees: List[Dict[str, Any]] = []
+    departments: List[Dict[str, Any]] = []
+    attendance: List[Dict[str, Any]] = []
+    shifts: List[Dict[str, Any]] = []
+    leave: List[Dict[str, Any]] = []
+    policies: List[Dict[str, Any]] = []
+    anomalies: List[Dict[str, Any]] = []

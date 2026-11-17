@@ -216,17 +216,6 @@ export const AIAssistant: React.FC = () => {
             ))
           )}
         </div>
-
-        {/* Security Harness & Role Badge */}
-        <div className="p-3 border-t border-border bg-white text-[11px] text-secondary space-y-1.5">
-          <div className="flex items-center gap-1.5 font-medium text-dark">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            <span className="truncate font-semibold">{user?.role?.replace('_', ' ').toUpperCase()} Scope</span>
-          </div>
-          <p className="text-[10px] text-slate-500 leading-tight">
-            Role-scoped authorization enforced. Record privacy guaranteed.
-          </p>
-        </div>
       </div>
 
       {/* Main Chat Workspace */}
@@ -241,7 +230,11 @@ export const AIAssistant: React.FC = () => {
               <h2 className="text-xs font-bold text-dark">AttendAI Workforce Intelligence</h2>
               <div className="flex items-center gap-1.5 text-[10px] text-secondary">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span>Connected Provider: <strong>{activeProvider}</strong></span>
+                {user?.role === 'admin' ? (
+                  <span>AI Engine: <strong>{activeProvider}</strong></span>
+                ) : (
+                  <span>Enterprise Assistant &bull; Ready</span>
+                )}
               </div>
             </div>
           </div>

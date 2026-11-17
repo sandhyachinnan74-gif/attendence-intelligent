@@ -59,6 +59,8 @@ class User(Base):
     organization = relationship("Organization", back_populates="users")
     employee = relationship("Employee", back_populates="user", uselist=False)
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan", order_by="desc(Notification.created_at)")
+    notification_preferences = relationship("NotificationPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 class Employee(Base):
     __tablename__ = "employees"
@@ -302,3 +304,34 @@ class RefreshToken(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="refresh_tokens")
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    category = Column(String(50), nullable=False, index=True)  # attendance, leave, shifts, anomalies, approvals, employee_management, policies, system, security, ai
+    priority = Column(String(20), nullable=False, default="information")  # critical, warning, success, information
+    link = Column(String(255), nullable=True)
+    is_read = Column(Boolean, default=False, nullable=False, index=True)
+    is_archived = Column(Boolean, default=False, nullable=False)
+    metadata_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = relationship("User", back_populates="notifications")
+
+class NotificationPreference(Base):
+    __tablename__ = "notification_preferences"
+
+    id = Column(String(36), primary_key=True, default=gen_uuid)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    email_enabled = Column(Boolean, default=True, nullable=False)
+    in_app_enabled = Column(Boolean, default=True, nullable=False)
+    categories = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="notification_preferences")

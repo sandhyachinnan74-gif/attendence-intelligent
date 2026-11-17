@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Calendar, Clock, Moon, Sun, CheckCircle, Users, X } from 'lucide-react';
+import { Plus, Calendar, Clock, Moon, Sun, CheckCircle, Users, X, Info, Shield, CheckCircle2 } from 'lucide-react';
 import { api } from '../services/api';
 import { Shift, Employee } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 export const Shifts: React.FC = () => {
+  const { user } = useAuth();
+  const isEmployee = user?.role === 'employee';
+
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [myShiftData, setMyShiftData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -40,6 +45,7 @@ export const Shifts: React.FC = () => {
   };
 
   const fetchEmployees = async () => {
+    if (isEmployee) return;
     try {
       const res = await api.get('/employees');
       setEmployees(res.data);
@@ -48,10 +54,23 @@ export const Shifts: React.FC = () => {
     }
   };
 
+  const fetchMyShift = async () => {
+    try {
+      const res = await api.get('/shifts/my-shift');
+      setMyShiftData(res.data);
+    } catch (e) {
+      console.error('Failed to load my shift:', e);
+    }
+  };
+
   useEffect(() => {
     fetchShifts();
-    fetchEmployees();
-  }, []);
+    if (isEmployee) {
+      fetchMyShift();
+    } else {
+      fetchEmployees();
+    }
+  }, [isEmployee]);
 
   const handleCreateShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +102,217 @@ export const Shifts: React.FC = () => {
       alert(err.response?.data?.detail || 'Failed to assign shift');
     }
   };
+
+  const currentShift = myShiftData?.shift || (shifts.length > 0 ? shifts[0] : null);
+
+  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  if (isEmployee) {
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
+          <div>
+            <h1 className="text-xl font-bold text-dark tracking-tight">My Shifts & Schedule</h1>
+            <p className="text-xs text-secondary mt-0.5">View your assigned working shift, scheduled hours, and grace windows.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-xs font-semibold">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Schedule Active
+            </span>
+          </div>
+        </div>
+
+        {/* Primary Assigned Shift Card */}
+        <div className="bg-gradient-to-br from-primary/5 via-white to-sky-50/40 border border-primary/20 rounded-2xl p-6 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 bg-primary text-white text-xs font-mono font-bold rounded-md uppercase">
+                  {currentShift?.code || 'GEN'}
+                </span>
+                <span className="text-xs font-semibold text-secondary">Current Assigned Shift</span>
+                {currentShift?.is_overnight ? (
+                  <span className="flex items-center gap-1 text-[11px] text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full font-medium">
+                    <Moon className="w-3 h-3" />
+                    Overnight
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                    <Sun className="w-3 h-3" />
+                    Day Shift
+                  </span>
+                )}
+              </div>
+              <h2 className="text-2xl font-bold text-dark">{currentShift?.name || 'General Standard Shift'}</h2>
+              <p className="text-xs text-secondary max-w-xl">
+                Your regular scheduled attendance hours. Be sure to clock in prior to the grace window to maintain punctuality records.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="bg-white border border-border rounded-xl p-3 shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-secondary flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Timings
+                </span>
+                <p className="text-base font-mono font-bold text-primary mt-1">
+                  {currentShift?.start_time ? String(currentShift.start_time).substring(0, 5) : '09:00'} - {currentShift?.end_time ? String(currentShift.end_time).substring(0, 5) : '17:00'}
+                </p>
+              </div>
+
+              <div className="bg-white border border-border rounded-xl p-3 shadow-xs">
+                <span className="text-[10px] uppercase font-bold text-secondary flex items-center gap-1">
+                  <Calendar className="w-3 h-3" /> Required / Day
+                </span>
+                <p className="text-base font-bold text-dark mt-1">
+                  {currentShift?.required_hours || 8.0} hrs
+                </p>
+              </div>
+
+              <div className="bg-white border border-border rounded-xl p-3 shadow-xs col-span-2 sm:col-span-1">
+                <span className="text-[10px] uppercase font-bold text-secondary flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> Grace Window
+                </span>
+                <p className="text-base font-bold text-emerald-700 mt-1">
+                  +{currentShift?.grace_period_minutes || 15} mins
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Weekly Schedule Preview */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-bold text-dark">Weekly Schedule Pattern</h3>
+              <p className="text-xs text-secondary mt-0.5">Recurring weekly shift roster and working days.</p>
+            </div>
+            <span className="text-xs font-medium text-secondary">Standard 5-day Working Week</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+            {daysOfWeek.map((day, idx) => {
+              const isWeekend = idx >= 5;
+              return (
+                <div
+                  key={day}
+                  className={`p-3 rounded-xl border text-center transition-colors ${
+                    isWeekend
+                      ? 'bg-slate-50 border-border/60 text-secondary'
+                      : 'bg-white border-primary/20 shadow-xs'
+                  }`}
+                >
+                  <p className="text-xs font-bold text-dark">{day.slice(0, 3)}</p>
+                  <p className="text-[11px] text-secondary mt-0.5">{day}</p>
+                  <div className="mt-3 pt-2 border-t border-border/60">
+                    {isWeekend ? (
+                      <span className="inline-block px-2 py-0.5 bg-slate-200 text-slate-700 text-[10px] font-semibold rounded">
+                        Rest Day
+                      </span>
+                    ) : (
+                      <div>
+                        <span className="inline-block px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-mono font-bold rounded">
+                          {currentShift?.start_time ? String(currentShift.start_time).substring(0, 5) : '09:00'} - {currentShift?.end_time ? String(currentShift.end_time).substring(0, 5) : '17:00'}
+                        </span>
+                        <p className="text-[10px] text-emerald-700 font-semibold mt-1">8h scheduled</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Shift Policies & Information */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+            <h4 className="text-xs font-bold text-dark uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Info className="w-4 h-4 text-primary" />
+              Punctuality & Grace Window Policy
+            </h4>
+            <ul className="text-xs text-secondary space-y-2">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>You have a <strong>{currentShift?.grace_period_minutes || 15}-minute grace period</strong> after the official start time before tardiness is recorded.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Arrivals past the grace window are flagged automatically for HR attendance review.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Breaks exceeding the allotted duration may affect daily tracked hours.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+            <h4 className="text-xs font-bold text-dark uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-primary" />
+              Overtime & Schedule Changes
+            </h4>
+            <ul className="text-xs text-secondary space-y-2">
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Time worked beyond {currentShift?.required_hours || 8.0} daily hours qualifies for tracked overtime.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>To request a shift change or swap, submit a formal request via the HR Manager or Help & Support.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                <span>Check organization policies in the Policies & Documents tab for full overtime compensation terms.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* All Organization Shifts Overview (Read Only) */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-bold text-dark">Organization Shift Directory</h3>
+              <p className="text-xs text-secondary mt-0.5">Reference of all active shifts across the company.</p>
+            </div>
+            <span className="text-xs font-medium text-secondary">{shifts.length} Active Shifts</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {shifts.map((s) => (
+              <div key={s.id} className="bg-slate-50/60 border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="px-2 py-0.5 bg-white border border-border text-secondary text-[10px] font-mono font-bold rounded uppercase">
+                    {s.code}
+                  </span>
+                  {s.id === currentShift?.id ? (
+                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-semibold rounded-full border border-emerald-200">
+                      Your Shift
+                    </span>
+                  ) : s.is_overnight ? (
+                    <span className="text-[10px] text-purple-700 font-medium">Overnight</span>
+                  ) : (
+                    <span className="text-[10px] text-amber-700 font-medium">Day Shift</span>
+                  )}
+                </div>
+                <h4 className="text-xs font-bold text-dark">{s.name}</h4>
+                <p className="text-sm font-mono font-bold text-primary mt-1">
+                  {s.start_time.substring(0, 5)} - {s.end_time.substring(0, 5)}
+                </p>
+                <div className="mt-2 text-[11px] text-secondary flex justify-between">
+                  <span>Grace: {s.grace_period_minutes}m</span>
+                  <span>Required: {s.required_hours}h</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
-    auth, employees, departments, shifts, attendance, leave, anomalies, policies, analytics, exports, ai, system
+    auth, employees, departments, shifts, attendance, leave, anomalies, policies,
+    analytics, exports, ai, system, notifications, search
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -17,3 +18,5 @@ api_router.include_router(analytics.router)
 api_router.include_router(exports.router)
 api_router.include_router(ai.router)
 api_router.include_router(system.router)
+api_router.include_router(notifications.router)
+api_router.include_router(search.router)

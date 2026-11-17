@@ -18,7 +18,14 @@ import {
   CalendarCheck,
   CheckCircle2,
   FileText,
-  Bot
+  Bot,
+  Building,
+  Calendar,
+  CalendarDays,
+  AlertCircle,
+  HelpCircle,
+  Check,
+  X
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -30,45 +37,42 @@ import {
   CartesianGrid,
   BarChart,
   Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 import { api } from '../services/api';
 import { DashboardData, AttendanceRecord } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { LiveClock } from '../components/common/LiveClock';
 import { downloadFile } from '../utils/download';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
-  // Employee Portal State
-  const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
-  const [myRecords, setMyRecords] = useState<AttendanceRecord[]>([]);
+  const [adminData, setAdminData] = useState<any | null>(null);
+  const [employeeData, setEmployeeData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
   const [clockActionLoading, setClockActionLoading] = useState(false);
 
-  const fetchEmployeeData = async () => {
-    setLoading(true);
-    try {
-      const [todayRes, listRes] = await Promise.all([
-        api.get('/attendance/today').catch(() => ({ data: null })),
-        api.get('/attendance?limit=5').catch(() => ({ data: [] })),
-      ]);
-      setTodayRecord(todayRes.data);
-      setMyRecords(listRes.data || []);
-    } catch (e) {
-      console.error('Failed to load employee data:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Leave request modal state (for employees)
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveType, setLeaveType] = useState('annual');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [leaveReason, setLeaveReason] = useState('');
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+  const [leaveMsg, setLeaveMsg] = useState<{ text: string; error: boolean } | null>(null);
 
   const fetchAdminDashboard = async () => {
     setLoading(true);
     try {
       const res = await api.get('/analytics/dashboard');
-      setData(res.data);
+      setAdminData(res.data);
     } catch (e) {
       console.error('Failed to load dashboard metrics:', e);
     } finally {
@@ -76,19 +80,32 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const fetchEmployeeDashboard = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/analytics/employee-dashboard');
+      setEmployeeData(res.data);
+    } catch (e) {
+      console.error('Failed to load employee dashboard:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (user?.role === 'employee') {
-      fetchEmployeeData();
+      fetchEmployeeDashboard();
     } else {
       fetchAdminDashboard();
     }
   }, [user]);
 
+  // Employee Punch Actions
   const handleClockIn = async () => {
     setClockActionLoading(true);
     try {
       await api.post('/attendance/clock-in', {});
-      await fetchEmployeeData();
+      await fetchEmployeeDashboard();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Failed to clock in');
     } finally {
@@ -100,7 +117,7 @@ export const Dashboard: React.FC = () => {
     setClockActionLoading(true);
     try {
       await api.post('/attendance/clock-out', {});
-      await fetchEmployeeData();
+      await fetchEmployeeDashboard();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Failed to clock out');
     } finally {
@@ -110,13 +127,53 @@ export const Dashboard: React.FC = () => {
 
   const handleToggleBreak = async () => {
     setClockActionLoading(true);
+    const hasOpenBreak = employeeData?.today_record?.has_open_break;
     try {
-      await api.post('/attendance/break', { reason: 'Break' });
-      await fetchEmployeeData();
+      if (hasOpenBreak) {
+        await api.post('/attendance/end-break', {});
+      } else {
+        await api.post('/attendance/start-break', { reason: 'Lunch Break' });
+      }
+      await fetchEmployeeDashboard();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to toggle break');
+      alert(err.response?.data?.detail || 'Failed to update break status');
     } finally {
       setClockActionLoading(false);
+    }
+  };
+
+  // Leave Submit
+  const handleApplyLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLeaveSubmitting(true);
+    setLeaveMsg(null);
+    try {
+      await api.post('/leave', {
+        leave_type: leaveType,
+        start_date: startDate,
+        end_date: endDate,
+        reason: leaveReason
+      });
+      setLeaveMsg({ text: 'Leave application submitted successfully.', error: false });
+      setTimeout(() => {
+        setShowLeaveModal(false);
+        setLeaveMsg(null);
+        fetchEmployeeDashboard();
+      }, 1200);
+    } catch (err: any) {
+      setLeaveMsg({ text: err.response?.data?.detail || 'Failed to submit leave request.', error: true });
+    } finally {
+      setLeaveSubmitting(false);
+    }
+  };
+
+  // HR Leave Quick Decision
+  const handleLeaveDecision = async (leaveId: string, decision: 'approved' | 'rejected') => {
+    try {
+      await api.patch(`/leave/${leaveId}/review`, { status: decision });
+      await fetchAdminDashboard();
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Failed to update leave request');
     }
   };
 
@@ -127,52 +184,58 @@ export const Dashboard: React.FC = () => {
     year: 'numeric',
   });
 
-  // -------------------------------------------------------------
-  // EMPLOYEE PERSONAL WORKFORCE PORTAL
-  // -------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // RENDER: EMPLOYEE DASHBOARD
+  // -------------------------------------------------------------------------
   if (user?.role === 'employee') {
-    const isClockedIn = !!todayRecord?.clock_in && !todayRecord?.clock_out;
-    const isClockedOut = !!todayRecord?.clock_in && !!todayRecord?.clock_out;
-    const hasOpenBreak = todayRecord?.breaks?.some((b) => !b.break_end);
+    const kpis = employeeData?.kpis || {};
+    const todayRec = employeeData?.today_record;
+    const shift = employeeData?.assigned_shift;
+    const punches = employeeData?.recent_punches || [];
+    const trends = employeeData?.attendance_trends || [];
+    const announcements = employeeData?.company_announcements || [];
+    const leaveSummary = employeeData?.leave_summary || {};
 
-    const totalWorkedHrs = myRecords.reduce((acc, r) => acc + (r.worked_minutes || 0) / 60, 0);
+    const isClockedIn = Boolean(todayRec?.clock_in);
+    const isClockedOut = Boolean(todayRec?.clock_out);
+    const hasOpenBreak = Boolean(todayRec?.has_open_break);
 
     return (
       <div className="space-y-6">
-        {/* Welcome Header */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
           <div>
             <h1 className="text-xl font-bold text-dark tracking-tight">
-              Welcome back, {user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : (user?.email || 'Employee')}
+              Welcome back, {user.first_name}!
             </h1>
             <p className="text-xs text-secondary mt-0.5">
-              Personal Workforce Portal &bull; {user?.employee_code || 'EMP'} &bull; {todayStr}
+              Personal Workforce Portal &bull; Shift: {shift?.name || 'General'} &bull; {todayStr}
             </p>
           </div>
           <div className="flex items-center gap-2.5">
             <button
-              onClick={fetchEmployeeData}
+              onClick={fetchEmployeeDashboard}
               disabled={loading}
               className="px-3 py-1.5 bg-white border border-border rounded-lg text-xs font-medium text-dark hover:bg-slate-50 flex items-center gap-1.5 transition-colors shadow-sm disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-primary' : 'text-secondary'}`} />
               <span>Refresh</span>
             </button>
-            <Link
-              to="/leave"
+            <button
+              onClick={() => setShowLeaveModal(true)}
               className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-medium hover:bg-primary-hover flex items-center gap-1.5 transition-colors shadow-sm"
             >
               <CalendarCheck className="w-3.5 h-3.5" />
-              <span>Request Leave</span>
-            </Link>
+              <span>Apply for Leave</span>
+            </button>
           </div>
         </div>
 
-        {/* Live Clock & Action Banner */}
+        {/* 1. Live Attendance Clock & Punch Banner */}
         <div className="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center md:text-left">
             <span className="inline-block px-3 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 border border-white/20 uppercase tracking-wider text-blue-200">
-              Shift: General (09:00 - 17:00)
+              Shift: {shift?.name} ({shift?.start_time} - {shift?.end_time})
             </span>
             <LiveClock className="text-3xl sm:text-4xl font-extrabold tracking-tight font-mono text-white" />
             <p className="text-xs text-blue-200">
@@ -234,157 +297,378 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Employee Summary KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* 2. Employee 6 KPI Cards Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-card border border-border rounded-xl p-4 shadow-card">
             <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider block mb-1">
-              Hours Logged
+              Today's Status
             </span>
-            <div className="text-2xl font-bold text-dark">{totalWorkedHrs.toFixed(1)}h</div>
-            <span className="text-[10px] text-secondary">Past 5 shifts</span>
+            <div className="text-base font-bold text-dark capitalize truncate">
+              {kpis.today_status?.replace('_', ' ') || 'Not Clocked'}
+            </div>
+            <span className="text-[10px] text-secondary">
+              {todayRec?.clock_in ? `In: ${todayRec.clock_in}` : 'Shift pending'}
+            </span>
           </div>
 
           <div className="bg-card border border-border rounded-xl p-4 shadow-card">
             <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider block mb-1">
-              Recent Punctuality
+              Hours Worked Today
             </span>
-            <div className="text-2xl font-bold text-success">
-              {myRecords.length > 0
-                ? `${Math.round(
-                    (myRecords.filter((r) => r.status === 'present').length / myRecords.length) * 100
-                  )}%`
-                : '100%'}
-            </div>
-            <span className="text-[10px] text-secondary">On-time arrival</span>
+            <div className="text-2xl font-bold text-dark">{kpis.hours_worked_today || 0}h</div>
+            <span className="text-[10px] text-secondary">Required: {shift?.required_hours || 8}h</span>
           </div>
 
           <div className="bg-card border border-border rounded-xl p-4 shadow-card">
             <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider block mb-1">
-              Overtime
+              Monthly Hours
             </span>
-            <div className="text-2xl font-bold text-primary">
-              {(myRecords.reduce((acc, r) => acc + (r.overtime_minutes || 0), 0) / 60).toFixed(1)}h
-            </div>
-            <span className="text-[10px] text-secondary">Approved overtime</span>
+            <div className="text-2xl font-bold text-dark">{kpis.monthly_working_hours || 0}h</div>
+            <span className="text-[10px] text-success font-medium">Logged this month</span>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+            <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider block mb-1">
+              Monthly Overtime
+            </span>
+            <div className="text-2xl font-bold text-dark">{kpis.monthly_overtime || 0}h</div>
+            <span className="text-[10px] text-secondary">Beyond scheduled shifts</span>
+          </div>
+
+          <div className="bg-card border border-border rounded-xl p-4 shadow-card">
+            <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider block mb-1">
+              Late Arrivals
+            </span>
+            <div className="text-2xl font-bold text-dark">{kpis.late_arrivals_this_month || 0}</div>
+            <span className="text-[10px] text-secondary">Past shift grace period</span>
           </div>
 
           <div className="bg-card border border-border rounded-xl p-4 shadow-card">
             <span className="text-[11px] font-semibold text-secondary uppercase tracking-wider block mb-1">
               Leave Balance
             </span>
-            <div className="text-2xl font-bold text-dark">18 Days</div>
-            <span className="text-[10px] text-secondary">Paid time off</span>
+            <div className="text-2xl font-bold text-primary">{kpis.available_leave_balance || 0}d</div>
+            <span className="text-[10px] text-secondary">Paid Time Off remaining</span>
           </div>
         </div>
 
-        {/* Quick Help & AI Assistant Card */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-card border border-border rounded-xl p-5 shadow-card flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-primary flex items-center justify-center flex-shrink-0">
-              <Bot className="w-5 h-5" />
+        {/* 3. My Schedule & My Working Hours Trends */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* My Schedule Card */}
+          <div className="bg-card border border-border rounded-xl p-5 shadow-card space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-primary" />
+                <h2 className="text-xs font-bold text-dark">My Schedule & Shift</h2>
+              </div>
+              <span className="text-[10px] font-semibold bg-blue-50 text-primary px-2 py-0.5 rounded border border-blue-100">
+                Active Schedule
+              </span>
             </div>
-            <div className="space-y-1">
-              <h3 className="text-xs font-bold text-dark">AttendAI Personal Assistant</h3>
-              <p className="text-xs text-secondary">
-                Ask questions about your working hours, shift schedule, overtime policies, or leave rules.
-              </p>
-              <Link to="/ai" className="inline-block text-xs font-semibold text-primary hover:underline pt-1">
-                Chat with Assistant &rarr;
-              </Link>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-slate-50 border border-border rounded-lg">
+                <span className="text-secondary block font-medium">Assigned Shift</span>
+                <span className="font-bold text-dark text-sm block mt-0.5">
+                  {shift?.name} ({shift?.code})
+                </span>
+                <span className="text-secondary mt-1 block">
+                  Working hours: <strong>{shift?.start_time} – {shift?.end_time}</strong> ({shift?.required_hours}h required)
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-border rounded-lg flex items-center justify-between">
+                <div>
+                  <span className="text-secondary block font-medium">Punctuality Grace Period</span>
+                  <span className="font-semibold text-dark text-xs block mt-0.5">
+                    {shift?.grace_period_minutes} minutes from shift start
+                  </span>
+                </div>
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-border rounded-lg">
+                <span className="text-secondary block font-medium">Next Scheduled Days</span>
+                <span className="font-semibold text-dark text-xs block mt-0.5">
+                  Monday – Friday &bull; Standard Operating Hours
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-5 shadow-card flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-success flex items-center justify-center flex-shrink-0">
-              <FileText className="w-5 h-5" />
+          {/* My Attendance Trends Chart */}
+          <div className="bg-card border border-border rounded-xl p-5 shadow-card lg:col-span-2">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
+              <div>
+                <h2 className="text-xs font-bold text-dark">My Attendance Trends (Past 7 Days)</h2>
+                <p className="text-[11px] text-secondary mt-0.5">Worked hours vs standard 8-hour requirement</p>
+              </div>
             </div>
-            <div className="space-y-1">
-              <h3 className="text-xs font-bold text-dark">HR Policy & Handbook</h3>
-              <p className="text-xs text-secondary">
-                Search official company policies on remote work, overtime compensation, breaks, and compliance.
-              </p>
-              <Link to="/policies" className="inline-block text-xs font-semibold text-success hover:underline pt-1">
-                Browse Policies &rarr;
-              </Link>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="empHrsGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563EB" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#2563EB" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" />
+                  <YAxis tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" domain={[0, 12]} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: '8px',
+                      border: '1px solid #E2E8F0',
+                      fontSize: '11px',
+                    }}
+                  />
+                  <Area type="monotone" dataKey="hours" name="Worked Hours" stroke="#2563EB" fill="url(#empHrsGradient)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="required" name="Required (8h)" stroke="#94A3B8" strokeDasharray="3 3" fill="none" strokeWidth={1.5} />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>
 
-        {/* Recent Personal Attendance */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-dark">Recent Personal Attendance</h2>
-            <Link to="/attendance" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-              <span>View Full History</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-border text-secondary uppercase tracking-wider text-[10px]">
-                  <th className="py-2.5 px-3">Date</th>
-                  <th className="py-2.5 px-3">Clock In</th>
-                  <th className="py-2.5 px-3">Clock Out</th>
-                  <th className="py-2.5 px-3">Worked Duration</th>
-                  <th className="py-2.5 px-3">Overtime</th>
-                  <th className="py-2.5 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border font-medium">
-                {myRecords.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-2.5 px-3 font-semibold text-dark">{r.date}</td>
-                    <td className="py-2.5 px-3 text-dark font-mono">
-                      {r.clock_in ? new Date(r.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                    </td>
-                    <td className="py-2.5 px-3 text-dark font-mono">
-                      {r.clock_out ? new Date(r.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
-                    </td>
-                    <td className="py-2.5 px-3 text-dark font-mono">
-                      {((r.worked_minutes || 0) / 60).toFixed(1)}h
-                    </td>
-                    <td className="py-2.5 px-3 text-secondary font-mono">
-                      {((r.overtime_minutes || 0) / 60).toFixed(1)}h
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded-full capitalize ${
-                          r.status === 'present'
-                            ? 'bg-emerald-50 text-success'
-                            : r.status === 'late'
-                            ? 'bg-amber-50 text-warning'
-                            : r.status === 'incomplete'
-                            ? 'bg-slate-100 text-secondary'
-                            : 'bg-rose-50 text-danger'
-                        }`}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
+        {/* 4. Recent Activity & Company Announcements */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Recent Personal Punches */}
+          <div className="bg-card border border-border rounded-xl p-5 shadow-card lg:col-span-2">
+            <div className="flex items-center justify-between pb-3 border-b border-border mb-3">
+              <h2 className="text-xs font-bold text-dark">Recent Attendance Punches</h2>
+              <Link to="/attendance" className="text-[11px] text-primary hover:underline font-medium">
+                View all history &rarr;
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border text-secondary text-[11px]">
+                    <th className="pb-2 font-semibold">Date</th>
+                    <th className="pb-2 font-semibold">Clock In</th>
+                    <th className="pb-2 font-semibold">Clock Out</th>
+                    <th className="pb-2 font-semibold">Worked</th>
+                    <th className="pb-2 font-semibold">Overtime</th>
+                    <th className="pb-2 font-semibold">Status</th>
                   </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {punches.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-4 text-center text-secondary">
+                        No previous punches found.
+                      </td>
+                    </tr>
+                  ) : (
+                    punches.map((p: any) => (
+                      <tr key={p.id} className="hover:bg-slate-50/50">
+                        <td className="py-2.5 font-medium text-dark">{p.date}</td>
+                        <td className="py-2.5 text-secondary">{p.clock_in}</td>
+                        <td className="py-2.5 text-secondary">{p.clock_out}</td>
+                        <td className="py-2.5 font-semibold text-dark">{p.worked_hours}h</td>
+                        <td className="py-2.5 text-secondary">
+                          {p.overtime_hours > 0 ? (
+                            <span className="font-semibold text-primary">+{p.overtime_hours}h</span>
+                          ) : (
+                            '0h'
+                          )}
+                        </td>
+                        <td className="py-2.5">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
+                              p.status === 'present'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : p.status === 'late'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {p.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Company Announcements & AI Assistant Shortcuts */}
+          <div className="space-y-6">
+            <div className="bg-card border border-border rounded-xl p-5 shadow-card space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-border">
+                <FileText className="w-4 h-4 text-primary" />
+                <h2 className="text-xs font-bold text-dark">Company Announcements</h2>
+              </div>
+              <div className="space-y-2.5 text-xs">
+                {announcements.map((a: any) => (
+                  <div key={a.id} className="p-3 bg-slate-50 border border-border rounded-lg space-y-1">
+                    <p className="font-bold text-dark">{a.title}</p>
+                    <p className="text-[11px] text-secondary leading-snug">{a.message}</p>
+                    <span className="text-[9px] text-slate-400 block pt-1">{a.date}</span>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </div>
+
+            {/* AI Assistant Quick Card */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 shadow-card space-y-3">
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-primary" />
+                <h3 className="text-xs font-bold text-dark">AI Workforce Assistant</h3>
+              </div>
+              <p className="text-[11px] text-secondary leading-snug">
+                Ask questions about your working hours, overtime balance, or attendance policies.
+              </p>
+              <div className="space-y-1.5 pt-1">
+                <button
+                  onClick={() => navigate('/ai')}
+                  className="w-full text-left p-2 rounded bg-white border border-blue-200 text-[11px] font-medium text-dark hover:border-primary transition-colors flex items-center justify-between"
+                >
+                  <span>"How much overtime did I do this month?"</span>
+                  <ArrowRight className="w-3 h-3 text-primary" />
+                </button>
+                <button
+                  onClick={() => navigate('/ai')}
+                  className="w-full text-left p-2 rounded bg-white border border-blue-200 text-[11px] font-medium text-dark hover:border-primary transition-colors flex items-center justify-between"
+                >
+                  <span>"What is our grace period policy?"</span>
+                  <ArrowRight className="w-3 h-3 text-primary" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
+
+        {/* Leave Request Modal */}
+        {showLeaveModal && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4 border border-border">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <h3 className="text-sm font-bold text-dark">Apply for Leave</h3>
+                <button
+                  onClick={() => setShowLeaveModal(false)}
+                  className="p-1 rounded text-secondary hover:text-dark hover:bg-slate-100"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {leaveMsg && (
+                <div
+                  className={`p-3 rounded-lg text-xs border ${
+                    leaveMsg.error ? 'bg-red-50 text-danger border-red-200' : 'bg-emerald-50 text-success border-emerald-200'
+                  }`}
+                >
+                  {leaveMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={handleApplyLeave} className="space-y-3 text-xs">
+                <div>
+                  <label className="block font-medium text-dark mb-1">Leave Type</label>
+                  <select
+                    value={leaveType}
+                    onChange={(e) => setLeaveType(e.target.value)}
+                    className="w-full px-3 py-1.5 border border-border rounded-lg bg-slate-50 text-dark"
+                  >
+                    <option value="annual">Annual Leave (PTO)</option>
+                    <option value="sick">Sick Leave</option>
+                    <option value="casual">Casual Leave</option>
+                    <option value="unpaid">Unpaid Leave</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium text-dark mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-border rounded-lg bg-slate-50 text-dark"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-dark mb-1">End Date</label>
+                    <input
+                      type="date"
+                      required
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-border rounded-lg bg-slate-50 text-dark"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-dark mb-1">Reason for Leave</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={leaveReason}
+                    onChange={(e) => setLeaveReason(e.target.value)}
+                    placeholder="Brief explanation for time off..."
+                    className="w-full px-3 py-1.5 border border-border rounded-lg bg-slate-50 text-dark"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setShowLeaveModal(false)}
+                    className="px-3 py-1.5 rounded-lg border border-border text-dark hover:bg-slate-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={leaveSubmitting}
+                    className="px-4 py-1.5 rounded-lg bg-primary text-white font-semibold hover:bg-primary-hover shadow-sm disabled:opacity-50"
+                  >
+                    {leaveSubmitting ? 'Submitting...' : 'Submit Leave Request'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
-  // -------------------------------------------------------------
-  // ADMIN / HR WORKFORCE DASHBOARD
-  // -------------------------------------------------------------
-  const kpis = data?.kpis;
+  // -------------------------------------------------------------------------
+  // RENDER: HR MANAGER & ADMIN DASHBOARD
+  // -------------------------------------------------------------------------
+  const isAdmin = user?.role === 'admin';
+  const kpis = adminData?.kpis || {};
+  const trends = adminData?.trends || [];
+  const deptStats = adminData?.department_stats || [];
+  const needsAttention = adminData?.needs_attention || [];
+  const recentActivity = adminData?.recent_activity || [];
+  const aiInsights = adminData?.ai_insights || [];
+  const leaveDist = adminData?.leave_distribution || [];
+  const overtimeDist = adminData?.overtime_distribution || [];
+  const absenteeismTrends = adminData?.absenteeism_trends || [];
+  const shiftOverview = adminData?.shift_overview || [];
 
   return (
     <div className="space-y-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
         <div>
-          <h1 className="text-xl font-bold text-dark tracking-tight">Workforce Dashboard</h1>
-          <p className="text-xs text-secondary mt-0.5">Real-time attendance intelligence &bull; {todayStr}</p>
+          <h1 className="text-xl font-bold text-dark tracking-tight">
+            Workforce Dashboard
+          </h1>
+          <p className="text-xs text-secondary mt-0.5">
+            {isAdmin
+              ? `Executive organization-wide intelligence \u2022 ${todayStr}`
+              : `HR Operational Overview & authorized monitoring \u2022 ${todayStr}`}
+          </p>
         </div>
         <div className="flex items-center gap-2.5">
           <button
@@ -405,318 +689,378 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* 8 KPI Cards Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         {/* Total Employees */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card flex flex-col justify-between">
-          <div className="flex items-center justify-between text-secondary mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Employees</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-primary flex items-center justify-center">
-              <Users className="w-4 h-4" />
-            </div>
+        <div className="bg-card border border-border rounded-xl p-3 shadow-card flex flex-col justify-between">
+          <div className="flex items-center justify-between text-secondary mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">
+              {isAdmin ? 'Employees' : 'In Scope'}
+            </span>
+            <Users className="w-3.5 h-3.5 text-primary" />
           </div>
           <div>
-            <span className="text-2xl font-bold text-dark">{kpis?.total_employees || 0}</span>
-            <div className="flex items-center gap-1 text-[11px] text-secondary mt-1 font-medium">
-              <span>Active headcount</span>
-            </div>
+            <span className="text-xl font-bold text-dark">{kpis.total_employees || 0}</span>
+            <span className="text-[9px] text-secondary block mt-0.5">Active headcount</span>
           </div>
         </div>
 
         {/* Present Today */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card flex flex-col justify-between">
-          <div className="flex items-center justify-between text-secondary mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Present</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-success flex items-center justify-center">
-              <UserCheck className="w-4 h-4" />
-            </div>
+        <div className="bg-card border border-border rounded-xl p-3 shadow-card flex flex-col justify-between">
+          <div className="flex items-center justify-between text-secondary mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Present</span>
+            <UserCheck className="w-3.5 h-3.5 text-success" />
           </div>
           <div>
-            <span className="text-2xl font-bold text-dark">{kpis?.present_today || 0}</span>
-            <div className="flex items-center gap-1 text-[11px] text-success mt-1 font-medium">
-              <TrendingUp className="w-3 h-3" />
-              <span>+{kpis?.comparison?.present || 0}% vs yest</span>
-            </div>
+            <span className="text-xl font-bold text-dark">{kpis.present_today || 0}</span>
+            <span className="text-[9px] text-success font-medium block mt-0.5">
+              +{kpis.comparison?.present || 0}% vs yest
+            </span>
           </div>
         </div>
 
         {/* Absent Today */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card flex flex-col justify-between">
-          <div className="flex items-center justify-between text-secondary mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Absent</span>
-            <div className="w-7 h-7 rounded-lg bg-rose-50 text-danger flex items-center justify-center">
-              <UserX className="w-4 h-4" />
-            </div>
+        <div className="bg-card border border-border rounded-xl p-3 shadow-card flex flex-col justify-between">
+          <div className="flex items-center justify-between text-secondary mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Absent</span>
+            <UserX className="w-3.5 h-3.5 text-danger" />
           </div>
           <div>
-            <span className="text-2xl font-bold text-dark">{kpis?.absent_today || 0}</span>
-            <div className="flex items-center gap-1 text-[11px] text-secondary mt-1 font-medium">
-              <span>Unscheduled leaves</span>
-            </div>
+            <span className="text-xl font-bold text-dark">{kpis.absent_today || 0}</span>
+            <span className="text-[9px] text-secondary block mt-0.5">Unexcused</span>
           </div>
         </div>
 
         {/* Late Arrivals */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card flex flex-col justify-between">
-          <div className="flex items-center justify-between text-secondary mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Late Arrivals</span>
-            <div className="w-7 h-7 rounded-lg bg-amber-50 text-warning flex items-center justify-center">
-              <ClockAlert className="w-4 h-4" />
-            </div>
+        <div className="bg-card border border-border rounded-xl p-3 shadow-card flex flex-col justify-between">
+          <div className="flex items-center justify-between text-secondary mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Late Arrivals</span>
+            <ClockAlert className="w-3.5 h-3.5 text-warning" />
           </div>
           <div>
-            <span className="text-2xl font-bold text-dark">{kpis?.late_arrivals || 0}</span>
-            <div className="flex items-center gap-1 text-[11px] text-warning mt-1 font-medium">
-              <TrendingDown className="w-3 h-3" />
-              <span>{kpis?.comparison?.late || 0}% change</span>
-            </div>
+            <span className="text-xl font-bold text-dark">{kpis.late_arrivals || 0}</span>
+            <span className="text-[9px] text-secondary block mt-0.5">Past grace period</span>
           </div>
         </div>
 
-        {/* Overtime Hours */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card flex flex-col justify-between">
-          <div className="flex items-center justify-between text-secondary mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Overtime</span>
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-primary flex items-center justify-center">
-              <Clock className="w-4 h-4" />
-            </div>
+        {/* Employees on Leave / Pending Leave */}
+        <div className="bg-card border border-border rounded-xl p-3 shadow-card flex flex-col justify-between">
+          <div className="flex items-center justify-between text-secondary mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">On Leave</span>
+            <Calendar className="w-3.5 h-3.5 text-purple-600" />
           </div>
           <div>
-            <span className="text-2xl font-bold text-dark">{kpis?.overtime_hours || 0}h</span>
-            <div className="flex items-center gap-1 text-[11px] text-secondary mt-1 font-medium">
-              <span>Recorded today</span>
-            </div>
+            <span className="text-xl font-bold text-dark">{kpis.employees_on_leave || 0}</span>
+            <span className="text-[9px] text-secondary block mt-0.5">Approved today</span>
           </div>
         </div>
 
-        {/* Punctuality Rate */}
-        <div className="bg-card border border-border rounded-xl p-4 shadow-card flex flex-col justify-between">
-          <div className="flex items-center justify-between text-secondary mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Attendance Rate</span>
-            <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4" />
-            </div>
+        {/* Pending Approvals / Corrections */}
+        <div className="bg-card border border-border rounded-xl p-3 shadow-card flex flex-col justify-between">
+          <div className="flex items-center justify-between text-secondary mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Pending Action</span>
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
           </div>
           <div>
-            <span className="text-2xl font-bold text-dark">{kpis?.attendance_rate || 0}%</span>
-            <div className="flex items-center gap-1 text-[11px] text-success mt-1 font-medium">
-              <span>Healthy threshold</span>
-            </div>
+            <span className="text-xl font-bold text-dark">{kpis.pending_approvals || 0}</span>
+            <span className="text-[9px] text-amber-600 font-medium block mt-0.5">Requires Review</span>
+          </div>
+        </div>
+
+        {/* Total Overtime */}
+        <div className="bg-card border border-border rounded-xl p-3 shadow-card flex flex-col justify-between">
+          <div className="flex items-center justify-between text-secondary mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Overtime</span>
+            <Clock className="w-3.5 h-3.5 text-primary" />
+          </div>
+          <div>
+            <span className="text-xl font-bold text-dark">{kpis.overtime_hours || 0}h</span>
+            <span className="text-[9px] text-secondary block mt-0.5">Logged today</span>
+          </div>
+        </div>
+
+        {/* Attendance Rate */}
+        <div className="bg-card border border-border rounded-xl p-3 shadow-card flex flex-col justify-between">
+          <div className="flex items-center justify-between text-secondary mb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Attendance %</span>
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+          </div>
+          <div>
+            <span className="text-xl font-bold text-dark">{kpis.attendance_rate || 0}%</span>
+            <span className="text-[9px] text-emerald-600 font-medium block mt-0.5">Punctuality Score</span>
           </div>
         </div>
       </div>
 
-      {/* Charts Row */}
+      {/* Main Charts & Analytics Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Attendance Trends Area Chart */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5 shadow-card">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card lg:col-span-2">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-border">
             <div>
-              <h2 className="text-sm font-bold text-dark">Attendance & Late Trends</h2>
-              <p className="text-[11px] text-secondary">Past 7 business days trajectory</p>
+              <h2 className="text-xs font-bold text-dark">Attendance & Late Trends</h2>
+              <p className="text-[11px] text-secondary mt-0.5">Workforce Attendance Trends (7-Day Overview) &bull; Headcount & punctuality volume</p>
             </div>
-            <div className="flex items-center gap-4 text-xs font-medium">
-              <span className="flex items-center gap-1.5 text-secondary">
-                <span className="w-2.5 h-2.5 rounded-full bg-primary"></span>
-                Present
-              </span>
-              <span className="flex items-center gap-1.5 text-secondary">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
-                Late
-              </span>
-            </div>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-secondary">
+              Active Scope
+            </span>
           </div>
-          <div className="h-64 w-full">
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data?.trends || []}>
+              <AreaChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0.0} />
+                  <linearGradient id="presentGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
                   </linearGradient>
-                  <linearGradient id="colorLate" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.2} />
+                  <linearGradient id="lateGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.4} />
                     <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748B' }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" />
+                <YAxis tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#FFFFFF',
-                    border: '1px solid #E5E7EB',
                     borderRadius: '8px',
+                    border: '1px solid #E2E8F0',
                     fontSize: '11px',
                   }}
                 />
-                <Area type="monotone" dataKey="present" stroke="#2563EB" strokeWidth={2} fillOpacity={1} fill="url(#colorPresent)" />
-                <Area type="monotone" dataKey="late" stroke="#F59E0B" strokeWidth={2} fillOpacity={1} fill="url(#colorLate)" />
+                <Area type="monotone" dataKey="present" name="Present" stroke="#10B981" fill="url(#presentGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="late" name="Late Arrivals" stroke="#F59E0B" fill="url(#lateGrad)" strokeWidth={1.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Department Attendance Rate Bar Chart */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
-          <h2 className="text-sm font-bold text-dark mb-1">Department Rates</h2>
-          <p className="text-[11px] text-secondary mb-4">Attendance percentage by business unit</p>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data?.department_stats || []} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E7EB" />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                <YAxis dataKey="department" type="category" tick={{ fontSize: 10, fill: '#111827' }} width={80} axisLine={false} tickLine={false} />
-                <Tooltip
-                  formatter={(val: any) => [`${val}%`, 'Rate']}
-                  contentStyle={{
-                    backgroundColor: '#FFFFFF',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                  }}
-                />
-                <Bar dataKey="rate" fill="#2563EB" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+        {/* Department Performance or Shift Overview */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <h2 className="text-xs font-bold text-dark">
+              {isAdmin ? 'Department Rates & Performance' : 'Department Rates & Statistics'}
+            </h2>
+            <Link to="/attendance" className="text-[11px] text-primary hover:underline font-medium">
+              Details &rarr;
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {deptStats.slice(0, 5).map((d: any, idx: number) => (
+              <div key={idx} className="space-y-1">
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <span className="text-dark">{d.department}</span>
+                  <span className="text-secondary font-mono">{d.rate}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      d.rate >= 90 ? 'bg-emerald-500' : d.rate >= 80 ? 'bg-amber-500' : 'bg-rose-500'
+                    }`}
+                    style={{ width: `${d.rate}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-secondary">
+                  <span>{d.present} present</span>
+                  <span>{d.absent} absent</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Needs Attention & AI Insights Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Needs Attention */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-5 shadow-card">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-warning" />
-              <h2 className="text-sm font-bold text-dark">Needs Attention</h2>
-            </div>
-            <Link to="/anomalies" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-              <span>View all</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+      {/* Second Analytics Row: Overtime Distribution & Leave Distribution */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Overtime Distribution */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
+          <div className="flex items-center justify-between mb-3 pb-3 border-b border-border">
+            <h2 className="text-xs font-bold text-dark">Overtime Distribution by Department</h2>
+            <span className="text-[10px] text-secondary">Accumulated Hours</span>
+          </div>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={overtimeDist} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="department" tick={{ fontSize: 9, fill: '#64748B' }} stroke="#CBD5E1" />
+                <YAxis tick={{ fontSize: 10, fill: '#64748B' }} stroke="#CBD5E1" />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '8px',
+                    border: '1px solid #E2E8F0',
+                    fontSize: '11px',
+                  }}
+                />
+                <Bar dataKey="overtime_hours" name="Overtime (hrs)" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Leave Distribution & Shift Overview */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <h2 className="text-xs font-bold text-dark">Workforce Leave Distribution (Active Year)</h2>
+            <Link to="/leave" className="text-[11px] text-primary hover:underline font-medium">
+              Manage Leave &rarr;
             </Link>
           </div>
+          <div className="grid grid-cols-3 gap-3">
+            {leaveDist.map((item: any, idx: number) => (
+              <div key={idx} className="p-3 bg-slate-50 border border-border rounded-lg text-center">
+                <span className="text-[10px] font-semibold text-secondary uppercase block">{item.type}</span>
+                <span className="text-lg font-bold text-dark block mt-0.5">{item.days}d</span>
+                <span className="text-[10px] text-secondary block">{item.count} approved</span>
+              </div>
+            ))}
+          </div>
 
-          <div className="divide-y divide-border">
-            {data?.needs_attention && data.needs_attention.length > 0 ? (
-              data.needs_attention.map((item) => (
-                <div key={item.id} className="py-3 flex items-start justify-between gap-4">
-                  <div className="space-y-1">
+          {/* Active Shift Coverage Snapshot */}
+          <div className="pt-2 border-t border-border">
+            <span className="text-[10px] font-bold text-secondary uppercase tracking-wider block mb-2">
+              Operational Shifts
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              {shiftOverview.slice(0, 3).map((s: any) => (
+                <div key={s.id} className="p-2 rounded bg-slate-50 border border-border">
+                  <p className="font-semibold text-dark truncate">{s.name}</p>
+                  <p className="text-[10px] text-secondary">{s.start_time} - {s.end_time}</p>
+                  <span className="text-[9px] text-primary font-medium">{s.assigned_employees} staff assigned</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Third Row: Needs Attention & Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Needs Attention Card */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card space-y-3">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-warning" />
+              <h2 className="text-xs font-bold text-dark">Needs Attention / Pending Anomalies</h2>
+            </div>
+            <Link to="/anomalies" className="text-[11px] text-primary hover:underline font-medium">
+              Review all &rarr;
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {needsAttention.length === 0 ? (
+              <div className="py-6 text-center text-secondary text-xs">
+                <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-1.5" />
+                <span>Zero pending anomalies. All shifts operating normally.</span>
+              </div>
+            ) : (
+              needsAttention.map((item: any) => (
+                <div
+                  key={item.id}
+                  className="p-3 bg-slate-50 border border-border rounded-lg flex items-center justify-between gap-3 text-xs"
+                >
+                  <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-dark">{item.employee}</span>
-                      <span className="text-[10px] text-secondary font-mono">{item.date}</span>
+                      <span className="font-bold text-dark">{item.employee}</span>
                       <span
-                        className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded-full border ${
-                          item.severity === 'critical'
-                            ? 'bg-rose-50 text-danger border-rose-200'
-                            : item.severity === 'high'
-                            ? 'bg-amber-50 text-warning border-amber-200'
-                            : 'bg-blue-50 text-primary border-blue-200'
+                        className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                          item.severity === 'high'
+                            ? 'bg-red-100 text-danger'
+                            : item.severity === 'medium'
+                            ? 'bg-amber-100 text-warning'
+                            : 'bg-blue-100 text-primary'
                         }`}
                       >
                         {item.severity}
                       </span>
                     </div>
-                    <p className="text-xs text-secondary">{item.explanation}</p>
+                    <p className="text-[11px] text-secondary mt-0.5">{item.explanation}</p>
+                    <span className="text-[9px] text-slate-400">{item.date}</span>
                   </div>
                   <Link
                     to="/anomalies"
-                    className="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-border text-[11px] font-medium text-dark rounded-md flex-shrink-0"
+                    className="px-2.5 py-1 bg-white border border-border rounded text-[11px] font-semibold text-primary hover:bg-slate-100 flex-shrink-0"
                   >
                     Investigate
                   </Link>
                 </div>
               ))
-            ) : (
-              <p className="text-xs text-secondary py-6 text-center">No urgent anomalies pending review.</p>
             )}
           </div>
         </div>
 
-        {/* AI Workforce Insights */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-card">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <h2 className="text-sm font-bold text-dark">AI Workforce Insights</h2>
-          </div>
-
-          <div className="space-y-3">
-            {data?.ai_insights?.map((ins, idx) => (
-              <div key={idx} className="p-3 rounded-lg bg-slate-50 border border-border/80 space-y-1">
-                <span className="text-xs font-semibold text-dark flex items-center gap-1.5">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      ins.level === 'positive' ? 'bg-success' : ins.level === 'warning' ? 'bg-warning' : 'bg-primary'
-                    }`}
-                  ></span>
-                  {ins.title}
-                </span>
-                <p className="text-xs text-secondary leading-relaxed">{ins.insight}</p>
-              </div>
-            ))}
-
-            <Link
-              to="/ai"
-              className="mt-3 block text-center py-2 px-3 bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-xs rounded-lg transition-colors"
-            >
-              Ask AttendAI Assistant &rarr;
+        {/* Recent Activity Table */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-card space-y-3">
+          <div className="flex items-center justify-between pb-3 border-b border-border">
+            <h2 className="text-xs font-bold text-dark">Recent Workforce Activity</h2>
+            <Link to="/attendance" className="text-[11px] text-primary hover:underline font-medium">
+              Full Attendance Sheet &rarr;
             </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-border text-secondary text-[11px]">
+                  <th className="pb-2 font-semibold">Employee</th>
+                  <th className="pb-2 font-semibold">Department</th>
+                  <th className="pb-2 font-semibold">Clock In</th>
+                  <th className="pb-2 font-semibold">Worked</th>
+                  <th className="pb-2 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {recentActivity.slice(0, 6).map((item: any) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50">
+                    <td className="py-2 font-medium text-dark">{item.employee}</td>
+                    <td className="py-2 text-secondary">{item.department}</td>
+                    <td className="py-2 text-secondary">{item.clock_in}</td>
+                    <td className="py-2 font-semibold text-dark">{item.worked_hours}h</td>
+                    <td className="py-2">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
+                          item.status === 'present'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : item.status === 'late'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {item.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
-      {/* Recent Activity Table */}
-      <div className="bg-card border border-border rounded-xl p-5 shadow-card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-bold text-dark">Recent Activity</h2>
-          <Link to="/attendance" className="text-xs font-semibold text-primary hover:underline flex items-center gap-1">
-            <span>View Attendance Sheet</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+      {/* Fourth Row: AI Workforce Insights Cards */}
+      <div className="bg-card border border-border rounded-xl p-5 shadow-card space-y-3">
+        <div className="flex items-center gap-2 pb-2 border-b border-border">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <h2 className="text-xs font-bold text-dark">
+            {isAdmin ? 'AI Workforce Intelligence Insights' : 'AI HR Operational Insights'}
+          </h2>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-border text-secondary uppercase tracking-wider text-[10px]">
-                <th className="py-2.5 px-3">Employee</th>
-                <th className="py-2.5 px-3">Department</th>
-                <th className="py-2.5 px-3">Clock In</th>
-                <th className="py-2.5 px-3">Clock Out</th>
-                <th className="py-2.5 px-3">Worked Duration</th>
-                <th className="py-2.5 px-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border font-medium">
-              {data?.recent_activity?.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="py-2.5 px-3 font-semibold text-dark">{r.employee}</td>
-                  <td className="py-2.5 px-3 text-secondary">{r.department}</td>
-                  <td className="py-2.5 px-3 text-dark font-mono">{r.clock_in}</td>
-                  <td className="py-2.5 px-3 text-dark font-mono">{r.clock_out}</td>
-                  <td className="py-2.5 px-3 text-dark font-mono">{r.worked_hours}h</td>
-                  <td className="py-2.5 px-3">
-                    <span
-                      className={`inline-block px-2 py-0.5 text-[10px] font-bold rounded-full capitalize ${
-                        r.status === 'present'
-                          ? 'bg-emerald-50 text-success'
-                          : r.status === 'late'
-                          ? 'bg-amber-50 text-warning'
-                          : r.status === 'incomplete'
-                          ? 'bg-slate-100 text-secondary'
-                          : 'bg-rose-50 text-danger'
-                      }`}
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {aiInsights.map((insight: any, idx: number) => (
+            <div
+              key={idx}
+              className={`p-3 rounded-lg border text-xs space-y-1 ${
+                insight.level === 'warning'
+                  ? 'bg-amber-50/50 border-amber-200 text-amber-900'
+                  : insight.level === 'positive'
+                  ? 'bg-emerald-50/50 border-emerald-200 text-emerald-900'
+                  : 'bg-blue-50/50 border-blue-200 text-blue-900'
+              }`}
+            >
+              <span className="font-bold block text-dark">{insight.title}</span>
+              <p className="text-[11px] text-secondary leading-snug">{insight.insight}</p>
+            </div>
+          ))}
         </div>
       </div>
     </div>

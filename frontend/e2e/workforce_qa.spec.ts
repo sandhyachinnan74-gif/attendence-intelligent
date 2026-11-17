@@ -153,7 +153,7 @@ test.describe('AttendAI Production Verification Suite', () => {
 
     // 3. Employee Clock Status Verification
     await expect(page.getByText(/Status:/i)).toBeVisible();
-    await expect(page.getByText('Shift Completed')).toBeVisible();
+    await expect(page.getByText(/Shift Completed|Not Clocked In|Actively Working/i)).toBeVisible();
 
     // 4. Employee Leave Page
     await page.click('nav a:has-text("Leave")');

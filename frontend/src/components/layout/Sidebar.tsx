@@ -3,15 +3,20 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
+  Building,
   Clock,
   CalendarDays,
+  CalendarCheck,
   AlertTriangle,
   Bot,
   FileText,
   BarChart3,
   Settings,
   HelpCircle,
-  CalendarCheck,
+  Activity,
+  History,
+  UserCheck,
+  User,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
@@ -26,35 +31,99 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { user } = useAuth();
   const role = user?.role || 'employee';
 
-  const isEmployee = role === 'employee';
+  let navGroups = [];
 
-  const workspaceNav = [
-    { name: 'Dashboard', to: '/', icon: LayoutDashboard, roles: ['admin', 'hr_manager', 'employee'] },
-    ...(!isEmployee
-      ? [{ name: 'Employees', to: '/employees', icon: Users, roles: ['admin', 'hr_manager'] }]
-      : []),
-    { name: 'Attendance', to: '/attendance', icon: Clock, roles: ['admin', 'hr_manager', 'employee'] },
-    { name: 'Leave', to: '/leave', icon: CalendarCheck, roles: ['admin', 'hr_manager', 'employee'] },
-    ...(!isEmployee
-      ? [{ name: 'Shifts & Scheduling', to: '/shifts', icon: CalendarDays, roles: ['admin', 'hr_manager'] }]
-      : []),
-  ];
-
-  const intelligenceNav = [
-    ...(!isEmployee
-      ? [{ name: 'Anomaly Detection', to: '/anomalies', icon: AlertTriangle, roles: ['admin', 'hr_manager'] }]
-      : []),
-    { name: 'AI Assistant', to: '/ai', icon: Bot, roles: ['admin', 'hr_manager', 'employee'] },
-    { name: 'Policies & Documents', to: '/policies', icon: FileText, roles: ['admin', 'hr_manager', 'employee'] },
-    ...(!isEmployee
-      ? [{ name: 'Analytics & Reports', to: '/analytics', icon: BarChart3, roles: ['admin', 'hr_manager'] }]
-      : []),
-  ];
-
-  const systemNav = [
-    { name: 'Settings', to: '/settings', icon: Settings, roles: ['admin', 'hr_manager', 'employee'] },
-    { name: 'Help & Support', to: '/help', icon: HelpCircle, roles: ['admin', 'hr_manager', 'employee'] },
-  ];
+  if (role === 'admin') {
+    navGroups = [
+      {
+        title: 'Workforce Management',
+        items: [
+          { name: 'Dashboard', to: '/', icon: LayoutDashboard },
+          { name: 'Employees', to: '/employees', icon: Users },
+          { name: 'Departments', to: '/departments', icon: Building },
+          { name: 'Attendance', to: '/attendance', icon: Clock },
+          { name: 'Shifts & Scheduling', to: '/shifts', icon: CalendarDays },
+          { name: 'Leave Management', to: '/leave', icon: CalendarCheck },
+        ],
+      },
+      {
+        title: 'Intelligence & Analytics',
+        items: [
+          { name: 'Anomaly Detection', to: '/anomalies', icon: AlertTriangle },
+          { name: 'AI Assistant', to: '/ai', icon: Bot },
+          { name: 'Policies & Documents', to: '/policies', icon: FileText },
+          { name: 'Analytics & Reports', to: '/analytics', icon: BarChart3 },
+        ],
+      },
+      {
+        title: 'System & Security',
+        items: [
+          { name: 'User Management', to: '/settings?tab=users', icon: UserCheck },
+          { name: 'Settings', to: '/settings', icon: Settings },
+          { name: 'System Diagnostics', to: '/diagnostics', icon: Activity },
+          { name: 'Audit Logs', to: '/audit-logs', icon: History },
+          { name: 'Help & Support', to: '/help', icon: HelpCircle },
+        ],
+      },
+    ];
+  } else if (role === 'hr_manager') {
+    navGroups = [
+      {
+        title: 'HR Operations',
+        items: [
+          { name: 'Dashboard', to: '/', icon: LayoutDashboard },
+          { name: 'Employees', to: '/employees', icon: Users },
+          { name: 'Attendance', to: '/attendance', icon: Clock },
+          { name: 'Shifts & Scheduling', to: '/shifts', icon: CalendarDays },
+          { name: 'Leave Management', to: '/leave', icon: CalendarCheck },
+        ],
+      },
+      {
+        title: 'Intelligence & Reporting',
+        items: [
+          { name: 'Anomaly Detection', to: '/anomalies', icon: AlertTriangle },
+          { name: 'AI Assistant', to: '/ai', icon: Bot },
+          { name: 'Policies & Documents', to: '/policies', icon: FileText },
+          { name: 'Analytics & Reports', to: '/analytics', icon: BarChart3 },
+        ],
+      },
+      {
+        title: 'Account',
+        items: [
+          { name: 'Personal Settings', to: '/settings', icon: Settings },
+          { name: 'Help & Support', to: '/help', icon: HelpCircle },
+        ],
+      },
+    ];
+  } else {
+    // Employee
+    navGroups = [
+      {
+        title: 'My Workspace',
+        items: [
+          { name: 'My Dashboard', to: '/', icon: LayoutDashboard },
+          { name: 'My Attendance', to: '/attendance', icon: Clock },
+          { name: 'My Shifts', to: '/shifts', icon: CalendarDays },
+          { name: 'My Leave', to: '/leave', icon: CalendarCheck },
+        ],
+      },
+      {
+        title: 'Knowledge & AI',
+        items: [
+          { name: 'AI Assistant', to: '/ai', icon: Bot },
+          { name: 'Policies & Documents', to: '/policies', icon: FileText },
+        ],
+      },
+      {
+        title: 'Personal',
+        items: [
+          { name: 'My Profile', to: '/settings?tab=profile', icon: User },
+          { name: 'Settings', to: '/settings', icon: Settings },
+          { name: 'Help & Support', to: '/help', icon: HelpCircle },
+        ],
+      },
+    ];
+  }
 
   return (
     <aside
@@ -86,98 +155,37 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
 
       {/* Navigation Groups */}
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
-        {/* Workspace */}
-        <div>
-          {!collapsed && (
-            <h3 className="px-3 mb-2 text-[11px] font-semibold text-secondary uppercase tracking-wider">
-              Workspace
-            </h3>
-          )}
-          <nav className="space-y-1">
-            {workspaceNav.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'text-secondary hover:text-dark hover:bg-slate-200/50'
-                    } ${collapsed ? 'justify-center' : ''}`
-                  }
-                  title={collapsed ? item.name : undefined}
-                >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  {!collapsed && <span>{item.name}</span>}
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Workforce Intelligence */}
-        <div>
-          {!collapsed && (
-            <h3 className="px-3 mb-2 text-[11px] font-semibold text-secondary uppercase tracking-wider">
-              Workforce Intelligence
-            </h3>
-          )}
-          <nav className="space-y-1">
-            {intelligenceNav.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'text-secondary hover:text-dark hover:bg-slate-200/50'
-                    } ${collapsed ? 'justify-center' : ''}`
-                  }
-                  title={collapsed ? item.name : undefined}
-                >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  {!collapsed && <span>{item.name}</span>}
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* System */}
-        <div>
-          {!collapsed && (
-            <h3 className="px-3 mb-2 text-[11px] font-semibold text-secondary uppercase tracking-wider">
-              System
-            </h3>
-          )}
-          <nav className="space-y-1">
-            {systemNav.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'text-secondary hover:text-dark hover:bg-slate-200/50'
-                    } ${collapsed ? 'justify-center' : ''}`
-                  }
-                  title={collapsed ? item.name : undefined}
-                >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
-                  {!collapsed && <span>{item.name}</span>}
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
+        {navGroups.map((group, idx) => (
+          <div key={idx}>
+            {!collapsed && (
+              <h3 className="px-3 mb-2 text-[11px] font-semibold text-secondary uppercase tracking-wider">
+                {group.title}
+              </h3>
+            )}
+            <nav className="space-y-1">
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-primary text-white shadow-sm'
+                          : 'text-secondary hover:text-dark hover:bg-slate-200/50'
+                      } ${collapsed ? 'justify-center' : ''}`
+                    }
+                    title={collapsed ? item.name : undefined}
+                  >
+                    <Icon className="w-4 h-4 flex-shrink-0" />
+                    {!collapsed && <span>{item.name}</span>}
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </div>
+        ))}
       </div>
 
       {/* User Footer Summary */}

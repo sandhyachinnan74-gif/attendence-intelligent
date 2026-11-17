@@ -13,17 +13,20 @@ All environment-verifiable components were tested and validated with zero mock c
 
 | Metric | Result |
 | :--- | :--- |
-| **Backend Pytest Suite** | **67 / 67 Passed (100%)** (27 regression + 5 live cloud LLM + 13 Assistant Intelligence + 1 Export + 21 Universal Intelligence & Employee Tools tests) |
+| **Backend Pytest Suite** | **72 / 72 Passed (100%)** (27 regression + 5 live cloud LLM + 13 Assistant Intelligence + 1 Export + 21 Universal Intelligence & Employee Tools + 5 Role UI, Notifications & Search tests) |
 | **Live Cloud LLM Inference** | **100% Live Verified** (NVIDIA NIM Mistral Large 4 & Groq GPT-OSS-120B Fallback) |
 | **Zero Raw JSON Guarantee** | **100% Verified** (Zero JSON in chat; structured Markdown tables, insights, and citations) |
 | **Universal Query Intelligence** | **100% Verified** (10/10 unseen complex workforce query scenarios passed dynamically) |
 | **Employee AI Data Isolation** | **100% Verified** (8 dedicated personal tools, session-enforced identity, zero IDOR) |
 | **Authenticated File Exports** | **100% Verified** (CSV and XLSX streaming with dual header/query token authentication) |
-| **Frontend Vitest Unit Suite** | **3 / 3 Passed (100%)** in 1.60s |
-| **Playwright Chromium E2E Tests** | **3 / 3 Passed (100%)** across Admin, HR Manager, and Employee Portals in 9.20s |
+| **Frontend Vitest Unit Suite** | **7 / 7 Passed (100%)** in 1.69s (Login + Role Navigation & Enterprise Clean UI) |
+| **Playwright Chromium E2E Tests** | **3 / 3 Passed (100%)** across Admin, HR Manager, and Employee Portals in 7.80s |
+| **Silent RBAC & Security** | **100% Verified** (Zero internal scope badges/technical authorization panels visible in UI) |
+| **Centralized Notification Center** | **100% Verified** (Event lifecycle, categories, unread badges, preferences, Admin-only system alerts) |
+| **Role-Scoped Global Search** | **100% Verified** (Interactive cross-entity search with strict role-level authorization) |
+| **Admin System Diagnostics Guard** | **100% Verified** (HTTP 403 on `/system/diagnostics` for non-admins; sanitized `/health`) |
 | **Locust Load Test Performance** | **71 Requests, 0 Failures (0.00%)**, Median: 22ms, Avg: 34ms |
-| **Frontend Production Compilation** | **0 Errors (`tsc && vite build` built in 4.84s)** |
-| **Security & RBAC Enforcement** | **100% Verified** (JWT tampering, IDOR, AI Tool Sandboxing, 403 Guards) |
+| **Frontend Production Compilation** | **0 Errors (`tsc && vite build` built in 5.19s)** |
 
 ---
 
@@ -83,6 +86,23 @@ All environment-verifiable components were tested and validated with zero mock c
 ### 2.6 Load & Performance Engineering
 - Dual FastAPI replica configuration in `docker-compose.yml` with Nginx reverse proxy using `least_conn`.
 - Sub-50ms average API response times for database-backed operations.
+
+### 2.7 Silent RBAC & Commercial Enterprise UI Experience
+- **Elimination of Internal Security Panels**: Completely removed internal authorization panels (such as `"EMPLOYEE Scope / Role-scoped authorization enforced. Record privacy guaranteed."` from `AIAssistant.tsx`) and technical execution banners (`"Engine Active"`, `"ADMIN Scope"`, `"Tenant Isolation"`).
+- **Commercial Dayforce-Grade Polish**: System security and authorization operate silently in the background. Normal enterprise users see clean product typography, status indicators, and operational metrics without internal developer telemetry.
+- **Role-Tailored Dashboards**:
+  - **Admin**: 8 KPIs (Total Employees, Present Today, Absent Today, Late Arrivals, Employees on Leave, Pending Approvals, Total Overtime, Attendance Rate); 9 Sections (Workforce Overview, Department Performance, Attendance Trends, Overtime Distribution, Absenteeism Trends, Leave Distribution, Needs Attention, Recent Activity, AI Workforce Insights).
+  - **HR Manager**: 8 KPIs (Employees in Authorized Scope, Present Today, Absent Today, Late Arrivals, Pending Leave Requests, Pending Attendance Corrections, Overtime Hours, Attendance Rate); 9 Sections (HR Overview, Attendance Monitoring, Leave Approvals, Shift Overview, Anomaly Alerts, Overtime Monitoring, Department Statistics, Recent HR Activity, AI HR Insights).
+  - **Employee**: 6 KPIs (Today's Attendance Status, Hours Worked Today, Monthly Working Hours, Monthly Overtime, Late Arrivals This Month, Available Leave Balance); 9 Sections (My Attendance, My Schedule, My Leave, My Working Hours, My Overtime, My Attendance Trends, Recent Activity, AI Assistant, Company Announcements).
+- **Role-Aware Sidebar**: Strict role-scoped navigation groups. Non-admins cannot access or view links for System Diagnostics (`/diagnostics`), Audit Logs (`/audit-logs`), or Anomaly Detection.
+
+### 2.8 Centralized Notification Center & Role-Scoped Global Search
+- **Event-Driven Notification Architecture**: Implemented database-backed `Notification` and `NotificationPreference` models with 10 operational categories (*Attendance, Leave, Shifts, Anomalies, Approvals, Employee Management, Policies, System, Security, AI*).
+- **Interactive TopNavbar Controls**: Unread notification badge with live count, dropdown quick-panel, and link to full Notification Center (`/notifications`).
+- **Comprehensive Notification Center Page**: Filter by category and priority (urgent, high, normal, low), full-text search, pagination, single click "Mark as Read", "Mark All as Read", archive, and notification preferences configuration modal.
+- **System Notification Isolation**: Critical infrastructure and security notifications are strictly restricted to Administrators.
+- **Global Search API (`/api/v1/search`)**: Role-scoped full-text search across employees, departments, shifts, attendance records, leave requests, policies, and anomalies with keyboard navigation and direct navigation popover.
+- **Admin System Diagnostics Guard**: Access to `/diagnostics` and `/api/v1/system/diagnostics` is strictly gated to Administrators (returns HTTP 403 Forbidden for HR Managers and Employees). Public health check `/api/v1/system/health` is sanitized to ensure underlying LLM providers are not leaked to unauthenticated users.
 
 ---
 

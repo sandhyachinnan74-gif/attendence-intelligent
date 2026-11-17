@@ -14,7 +14,8 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://attendai:password@localhost:5432/attendai"
-    SQLITE_DATABASE_URL: str = "sqlite+aiosqlite:///./attendai.db"
+    _DB_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "attendai.db")).replace(os.sep, "/")
+    SQLITE_DATABASE_URL: str = f"sqlite+aiosqlite:///{_DB_FILE}"
     USE_SQLITE_FALLBACK: bool = True
 
     # Redis

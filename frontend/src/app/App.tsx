@@ -14,6 +14,10 @@ import { Policies } from '../pages/Policies';
 import { Analytics } from '../pages/Analytics';
 import { Settings } from '../pages/Settings';
 import { HelpSupport } from '../pages/HelpSupport';
+import { NotificationsPage } from '../pages/Notifications';
+import { Departments } from '../pages/Departments';
+import { AuditLogs } from '../pages/AuditLogs';
+import { SystemDiagnostics } from '../pages/SystemDiagnostics';
 import { NotFoundPage } from '../pages/errors/NotFoundPage';
 import { ForbiddenPage } from '../pages/errors/ForbiddenPage';
 import { ServerErrorPage } from '../pages/errors/ServerErrorPage';
@@ -44,15 +48,16 @@ export const App: React.FC = () => {
                 </RoleGuard>
               }
             />
-            <Route path="attendance" element={<Attendance />} />
             <Route
-              path="shifts"
+              path="departments"
               element={
                 <RoleGuard allowedRoles={['admin', 'hr_manager']}>
-                  <Shifts />
+                  <Departments />
                 </RoleGuard>
               }
             />
+            <Route path="attendance" element={<Attendance />} />
+            <Route path="shifts" element={<Shifts />} />
             <Route path="leave" element={<Leave />} />
             <Route
               path="anomalies"
@@ -69,6 +74,23 @@ export const App: React.FC = () => {
               element={
                 <RoleGuard allowedRoles={['admin', 'hr_manager']}>
                   <Analytics />
+                </RoleGuard>
+              }
+            />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route
+              path="audit-logs"
+              element={
+                <RoleGuard allowedRoles={['admin']}>
+                  <AuditLogs />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="diagnostics"
+              element={
+                <RoleGuard allowedRoles={['admin']}>
+                  <SystemDiagnostics />
                 </RoleGuard>
               }
             />
