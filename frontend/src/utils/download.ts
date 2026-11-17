@@ -18,12 +18,16 @@ export const downloadFile = async (
   const token = localStorage.getItem('attendai_token') || localStorage.getItem('token') || '';
 
   // 1. Normalize endpoint URL:
-  // If endpointUrl begins with '/api/v1', strip it because api.defaults.baseURL is already '/api/v1'
+  // Strip '/api/v1' prefix if present so axios baseURL handles it
   let cleanUrl = endpointUrl;
   if (cleanUrl.startsWith(`${API_BASE}/`)) {
     cleanUrl = cleanUrl.substring(API_BASE.length);
   } else if (cleanUrl.startsWith(API_BASE)) {
     cleanUrl = cleanUrl.substring(API_BASE.length);
+  } else if (cleanUrl.startsWith('/api/v1/')) {
+    cleanUrl = cleanUrl.substring('/api/v1'.length);
+  } else if (cleanUrl.startsWith('/api/v1')) {
+    cleanUrl = cleanUrl.substring('/api/v1'.length);
   }
 
   // Ensure query param token is also present as a safety fallback
