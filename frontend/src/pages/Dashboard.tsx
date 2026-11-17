@@ -282,7 +282,7 @@ export const Dashboard: React.FC = () => {
         <div className="bg-gradient-to-r from-blue-900 to-indigo-900 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center md:text-left">
             <span className="inline-block px-3 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 border border-white/20 uppercase tracking-wider text-blue-200">
-              Shift: {shift?.name} ({shift?.start_time} - {shift?.end_time})
+              Shift: {shift?.name || 'General Standard Shift'} ({shift?.start_time || '09:00'} - {shift?.end_time || '17:30'})
             </span>
             <LiveClock className="text-3xl sm:text-4xl font-extrabold tracking-tight font-mono text-white" />
             <p className="text-xs text-blue-200">

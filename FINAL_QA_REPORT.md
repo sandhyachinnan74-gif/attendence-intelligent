@@ -611,3 +611,36 @@ If you ever restart your machine, run:
    ```powershell
    .\venv\Scripts\locust -f tests/locustfile.py --headless -u 10 -r 2 --run-time 15s --host http://127.0.0.1:8000 --only-summary
    ```
+
+
+---
+
+## 13. Policy Document Viewing & File Download Hardening (Nov 17, 2026)
+
+### A. Root Cause Analysis
+1. **HTTP 500 on Policy Access**:
+   - In `backend/app/api/v1/endpoints/policies.py`, queries ordered by `PolicyChunk.chunk_index.asc()`. However, `PolicyChunk` model and SQLite schema contain `page_number`, `title`, `section`, `content`, `token_count`, and `created_at` (no `chunk_index` column exists). This triggered `sqlite3.OperationalError: no such column: chunk_index` across `/policies/{id}` endpoints.
+   - Seeded policies ("AttendAI Global Attendance and Working Hours Policy" and "Comprehensive Leave and Time-Off Guidelines") had `file_path: None` in the database, causing 500/404 errors when attempting file download or retrieval.
+2. **Export Alert Dialog**:
+   - `frontend/src/utils/download.ts` triggered browser `window.alert()` dialogs (`localhost:3000 says: ...`). Replaced with non-blocking in-app toast notification events.
+3. **Empty / Incomplete Dashboard State**:
+   - Shift information previously displayed `()` and `- (h required)` when null or empty. Added bulletproof defaults in both backend `AnalyticsService` and frontend `Dashboard.tsx`.
+   - `Hours worked today` previously displayed `0h` during active shifts before clock out. Implemented dynamic elapsed time calculation so actively working employees immediately see their logged hours (e.g. 4.9h).
+
+### B. Implementation Summary
+1. **Storage Audit & Physical File Generation**:
+   - Generated valid, formatted PDF documents for seeded policies using ReportLab:
+     - `uploads/92069a11-869a-4d0b-a417-c9a51b3578a1_Global_Attendance_Policy.pdf` (2,555 bytes)
+     - `uploads/c0ad7c55-cf31-4973-ada1-d6217c43ac41_Comprehensive_Leave_Guidelines.pdf` (2,186 bytes)
+   - Normalized all file paths in `attendai.db` to absolute paths. 100% of indexed policies (18 documents) have verified physical files in persistent storage.
+2. **Backend API Endpoints Hardened**:
+   - `GET /api/v1/policies`: Lists all policies with chunk count, format, and size.
+   - `GET /api/v1/policies/{policy_id}`: Returns policy details ordered by `page_number` and `id`.
+   - `GET /api/v1/policies/{policy_id}/content`: Returns rich parsed document representations (DOCX headings, paragraphs, tables; PDF pages; TXT lines; indexed chunks).
+   - `GET /api/v1/policies/{policy_id}/view`: Inline file streaming with `Content-Disposition: inline` supporting Bearer header and `?token=` parameter.
+   - `GET /api/v1/policies/{policy_id}/download`: Authenticated file download preserving original filename and media type.
+3. **Interactive Document Viewer UI**:
+   - Dual-mode viewer supporting interactive PDF embed with zoom controls (50% to 200%), zoom reset, and fullscreen view.
+   - Structured text view for DOCX rendering styled headings, paragraphs, and formatted data tables.
+   - Live content search filter with matching element counter.
+   - Non-blocking toast notifications replacing native `alert()` dialogs.

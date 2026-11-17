@@ -21,6 +21,38 @@ from app.services.export_service import ExportService as LegacyExportService
 
 router = APIRouter(prefix="/exports", tags=["Custom Exports & Reporting"])
 
+async def get_legacy_export_user(
+    db: AsyncSession = Depends(get_db),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None)
+) -> User:
+    raw_token = None
+    if authorization and authorization.startswith("Bearer "):
+        raw_token = authorization.split(" ")[1]
+    elif token:
+        raw_token = token
+
+    if not raw_token:
+        from app.core.exceptions import UnauthorizedException
+        raise UnauthorizedException("Missing Authorization header or token parameter")
+
+    from app.core.security import decode_token
+    from app.core.exceptions import UnauthorizedException
+    try:
+        payload = decode_token(raw_token)
+    except Exception:
+        raise UnauthorizedException("Invalid or expired authentication token")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise UnauthorizedException("Token missing user subject")
+
+    stmt = select(User).where(User.id == user_id)
+    user = (await db.execute(stmt)).scalars().first()
+    if not user or not user.is_active:
+        raise UnauthorizedException("User account is inactive or not found")
+    return user
+
 @router.get("/config")
 async def get_export_config(
     user: User = Depends(get_current_user),
@@ -119,7 +151,7 @@ async def list_export_history(
 @router.get("/{export_id}/download")
 async def download_export_file(
     export_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_legacy_export_user),
     db: AsyncSession = Depends(get_db)
 ):
     file_path, filename, media_type = await ExportService.get_export_for_download(db, user, export_id)
@@ -127,43 +159,15 @@ async def download_export_file(
         path=file_path,
         filename=filename,
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition, Content-Length"
+        }
     )
 
 # -------------------------------------------------------------
 # Backwards-compatible legacy quick export endpoints
 # -------------------------------------------------------------
-async def get_legacy_export_user(
-    db: AsyncSession = Depends(get_db),
-    authorization: Optional[str] = Header(None),
-    token: Optional[str] = Query(None)
-) -> User:
-    raw_token = None
-    if authorization and authorization.startswith("Bearer "):
-        raw_token = authorization.split(" ")[1]
-    elif token:
-        raw_token = token
-
-    if not raw_token:
-        from app.core.exceptions import UnauthorizedException
-        raise UnauthorizedException("Missing Authorization header or token parameter")
-
-    from app.core.security import decode_token
-    from app.core.exceptions import UnauthorizedException
-    try:
-        payload = decode_token(raw_token)
-    except Exception:
-        raise UnauthorizedException("Invalid or expired authentication token")
-
-    user_id = payload.get("sub")
-    if not user_id:
-        raise UnauthorizedException("Token missing user subject")
-
-    stmt = select(User).where(User.id == user_id)
-    user = (await db.execute(stmt)).scalars().first()
-    if not user or not user.is_active:
-        raise UnauthorizedException("User account is inactive or not found")
-    return user
 
 @router.get("/attendance/csv")
 async def legacy_export_csv(

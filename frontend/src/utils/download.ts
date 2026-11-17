@@ -8,7 +8,8 @@ export const downloadFile = async (
   endpointUrl: string,
   fallbackFilename: string,
   onStart?: () => void,
-  onFinish?: () => void
+  onFinish?: () => void,
+  onError?: (err: string) => void
 ): Promise<boolean> => {
   if (onStart) onStart();
   try {
@@ -49,7 +50,15 @@ export const downloadFile = async (
     } else if (error.response?.data?.detail) {
       errorDetail = error.response.data.detail;
     }
-    alert(`Export Error: ${errorDetail}`);
+
+    if (onError) {
+      onError(errorDetail);
+    } else {
+      // Dispatch in-app notification event instead of intrusive browser alert()
+      window.dispatchEvent(new CustomEvent('attendai:notify', {
+        detail: { message: `Export Error: ${errorDetail}`, type: 'error' }
+      }));
+    }
     return false;
   } finally {
     if (onFinish) onFinish();

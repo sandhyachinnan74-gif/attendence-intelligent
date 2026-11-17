@@ -373,7 +373,6 @@ class AnalyticsService:
         has_open_break = False
         today_dict = None
         if today_rec:
-            hours_today = round(today_rec.worked_minutes / 60.0, 1)
             break_stmt = select(AttendanceBreak).where(
                 and_(
                     AttendanceBreak.attendance_record_id == today_rec.id,
@@ -385,10 +384,22 @@ class AnalyticsService:
 
             if today_rec.clock_out:
                 today_status = "shift_completed"
+                if today_rec.worked_minutes and today_rec.worked_minutes > 0:
+                    hours_today = round(today_rec.worked_minutes / 60.0, 1)
+                elif today_rec.clock_in and today_rec.clock_out:
+                    diff_mins = max(0, int((today_rec.clock_out - today_rec.clock_in).total_seconds() / 60))
+                    hours_today = round(diff_mins / 60.0, 1)
             elif has_open_break:
                 today_status = "on_break"
+                if today_rec.clock_in:
+                    now = datetime.now()
+                    diff_mins = max(0, int((now - today_rec.clock_in).total_seconds() / 60))
+                    hours_today = round(diff_mins / 60.0, 1)
             elif today_rec.clock_in:
                 today_status = "actively_working"
+                now = datetime.now()
+                diff_mins = max(0, int((now - today_rec.clock_in).total_seconds() / 60))
+                hours_today = round(diff_mins / 60.0, 1)
 
             today_dict = {
                 "id": today_rec.id,
@@ -479,12 +490,12 @@ class AnalyticsService:
         ]
 
         assigned_shift_dict = {
-            "name": shift.name if shift else "General Shift",
-            "code": shift.code if shift else "GEN",
-            "start_time": shift.start_time.strftime("%H:%M") if shift else "09:00",
-            "end_time": shift.end_time.strftime("%H:%M") if shift else "17:00",
-            "required_hours": shift.required_hours if shift else 8.0,
-            "grace_period_minutes": shift.grace_period_minutes if shift else 15
+            "name": shift.name if (shift and shift.name) else "General Standard Shift",
+            "code": shift.code if (shift and shift.code) else "GEN",
+            "start_time": shift.start_time.strftime("%H:%M") if (shift and shift.start_time) else "09:00",
+            "end_time": shift.end_time.strftime("%H:%M") if (shift and shift.end_time) else "17:30",
+            "required_hours": shift.required_hours if (shift and shift.required_hours) else 8.0,
+            "grace_period_minutes": shift.grace_period_minutes if (shift and shift.grace_period_minutes is not None) else 15
         }
 
         return {

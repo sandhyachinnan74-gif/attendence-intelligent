@@ -1,20 +1,86 @@
 import os
 import shutil
 import uuid
-from typing import List, Optional
-from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, status, Response
+from typing import List, Optional, Dict, Any
+from fastapi import APIRouter, Depends, UploadFile, File, Form, Query, status, Response, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, or_
+import docx
+import fitz # PyMuPDF
+
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.exceptions import NotFoundException, ValidationException
+from app.core.security import decode_token
+from app.core.exceptions import NotFoundException, ValidationException, UnauthorizedException, ForbiddenException
 from app.models.models import Policy, PolicyChunk, User
 from app.schemas.schemas import PolicyResponse, PolicyChunkResponse
 from app.services.policy_service import PolicyService
 from app.api.deps import get_current_user, get_current_hr_or_admin
 
 router = APIRouter(prefix="/policies", tags=["Policies & Documents"])
+
+async def get_policy_user(
+    db: AsyncSession = Depends(get_db),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None)
+) -> User:
+    """
+    Authenticates requests via standard Bearer authorization header OR ?token= query parameter.
+    Enables inline PDF viewing in iframes/embeds and direct file downloads.
+    """
+    raw_token = None
+    if authorization and authorization.startswith("Bearer "):
+        raw_token = authorization.split(" ")[1]
+    elif token:
+        raw_token = token
+
+    if not raw_token:
+        raise UnauthorizedException("Missing Authorization header or token query parameter")
+
+    try:
+        payload = decode_token(raw_token)
+    except Exception:
+        raise UnauthorizedException("Invalid or expired authentication token")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise UnauthorizedException("Token missing user subject")
+
+    stmt = select(User).where(User.id == user_id)
+    user = (await db.execute(stmt)).scalars().first()
+    if not user or not user.is_active:
+        raise UnauthorizedException("User account is inactive or not found")
+
+    return user
+
+def resolve_safe_file_path(file_path: Optional[str]) -> Optional[str]:
+    """
+    Safely resolves a file path on disk, preventing directory traversal and handling relative paths.
+    """
+    if not file_path:
+        return None
+    abs_path = os.path.abspath(file_path)
+    if os.path.exists(abs_path):
+        return abs_path
+    
+    # Try relative to upload directory
+    basename = os.path.basename(file_path)
+    alt_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, basename))
+    if os.path.exists(alt_path):
+        return alt_path
+
+    return None
+
+def detect_mime_type(ext: str) -> str:
+    ext = ext.lower()
+    if ext == ".pdf":
+        return "application/pdf"
+    elif ext in [".docx", ".doc"]:
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif ext == ".txt":
+        return "text/plain; charset=utf-8"
+    return "application/octet-stream"
 
 @router.get("", response_model=List[PolicyResponse])
 async def list_policies(
@@ -26,6 +92,7 @@ async def list_policies(
         .outerjoin(PolicyChunk, PolicyChunk.policy_id == Policy.id)
         .where(Policy.organization_id == user.organization_id)
         .group_by(Policy.id)
+        .order_by(Policy.created_at.desc())
     )
     res = await db.execute(stmt)
     output = []
@@ -36,8 +103,8 @@ async def list_policies(
             "title": pol.title,
             "category": pol.category,
             "file_path": pol.file_path,
-            "file_size": pol.file_size,
-            "status": pol.status,
+            "file_size": pol.file_size or 0,
+            "status": pol.status or "active",
             "chunk_count": count or 0,
             "created_at": pol.created_at
         })
@@ -58,7 +125,7 @@ async def upload_policy(
 
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     saved_filename = f"{uuid.uuid4()}_{file.filename}"
-    file_path = os.path.join(settings.UPLOAD_DIR, saved_filename)
+    file_path = os.path.abspath(os.path.join(settings.UPLOAD_DIR, saved_filename))
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -119,22 +186,29 @@ async def get_policy_detail(
     if not policy:
         raise NotFoundException("Policy document not found")
 
-    chunks_stmt = select(PolicyChunk).where(PolicyChunk.policy_id == policy.id).order_by(PolicyChunk.chunk_index.asc())
+    # Order by page_number, then id (PolicyChunk has NO chunk_index column)
+    chunks_stmt = select(PolicyChunk).where(
+        PolicyChunk.policy_id == policy.id
+    ).order_by(PolicyChunk.page_number.asc(), PolicyChunk.id.asc())
     chunks = (await db.execute(chunks_stmt)).scalars().all()
+
+    real_path = resolve_safe_file_path(policy.file_path)
+    ext = os.path.splitext(real_path)[1].lower() if real_path else ""
 
     return {
         "id": policy.id,
         "title": policy.title,
         "category": policy.category,
         "file_path": policy.file_path,
-        "file_size": policy.file_size,
+        "file_size": policy.file_size or 0,
         "status": policy.status,
+        "has_physical_file": bool(real_path),
+        "extension": ext.lstrip("."),
         "chunk_count": len(chunks),
         "created_at": policy.created_at,
         "chunks": [
             {
                 "id": c.id,
-                "chunk_index": c.chunk_index,
                 "page_number": c.page_number,
                 "section": c.section,
                 "content": c.content,
@@ -144,12 +218,17 @@ async def get_policy_detail(
         ]
     }
 
-@router.get("/{policy_id}/download")
-async def download_policy(
+@router.get("/{policy_id}/content")
+async def get_policy_content(
     policy_id: str,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    """
+    Returns rich, structured content for the interactive document viewer.
+    Extracts paragraphs, headings, and tables from DOCX, or pages from PDF,
+    with a graceful fallback to indexed policy chunks.
+    """
     stmt = select(Policy).where(
         and_(
             Policy.id == policy_id,
@@ -160,23 +239,197 @@ async def download_policy(
     if not policy:
         raise NotFoundException("Policy document not found")
 
-    if not policy.file_path or not os.path.exists(policy.file_path):
-        chunks_stmt = select(PolicyChunk).where(PolicyChunk.policy_id == policy.id).order_by(PolicyChunk.chunk_index.asc())
-        chunks = (await db.execute(chunks_stmt)).scalars().all()
-        full_text = "\n\n".join([f"--- Page {c.page_number} ({c.section}) ---\n{c.content}" for c in chunks])
-        return Response(
-            content=full_text.encode("utf-8"),
-            media_type="text/plain; charset=utf-8",
-            headers={"Content-Disposition": f'attachment; filename="{policy.title}.txt"'}
+    chunks_stmt = select(PolicyChunk).where(
+        PolicyChunk.policy_id == policy.id
+    ).order_by(PolicyChunk.page_number.asc(), PolicyChunk.id.asc())
+    chunks = (await db.execute(chunks_stmt)).scalars().all()
+
+    real_path = resolve_safe_file_path(policy.file_path)
+    ext = os.path.splitext(real_path)[1].lower() if real_path else ""
+
+    doc_format = "chunk"
+    total_pages = max([c.page_number for c in chunks] or [1])
+    elements: List[Dict[str, Any]] = []
+
+    if real_path and ext == ".pdf":
+        doc_format = "pdf"
+        try:
+            pdf_doc = fitz.open(real_path)
+            total_pages = len(pdf_doc)
+            for page_idx in range(len(pdf_doc)):
+                page = pdf_doc[page_idx]
+                text = page.get_text().strip()
+                elements.append({
+                    "type": "page",
+                    "page_number": page_idx + 1,
+                    "text": text
+                })
+            pdf_doc.close()
+        except Exception:
+            # Fallback to chunks
+            elements = [
+                {"type": "page", "page_number": c.page_number, "section": c.section, "text": c.content}
+                for c in chunks
+            ]
+    elif real_path and ext in [".docx", ".doc"]:
+        doc_format = "docx"
+        try:
+            doc = docx.Document(real_path)
+            for p in doc.paragraphs:
+                text = p.text.strip()
+                if not text:
+                    continue
+                style_name = p.style.name.lower() if p.style else "normal"
+                if "heading 1" in style_name or "title" in style_name:
+                    elements.append({"type": "heading1", "text": text})
+                elif "heading 2" in style_name:
+                    elements.append({"type": "heading2", "text": text})
+                elif "heading 3" in style_name:
+                    elements.append({"type": "heading3", "text": text})
+                else:
+                    elements.append({"type": "paragraph", "text": text})
+
+            for t in doc.tables:
+                rows_data = []
+                for row in t.rows:
+                    rows_data.append([cell.text.strip() for cell in row.cells])
+                if rows_data:
+                    elements.append({"type": "table", "rows": rows_data})
+        except Exception:
+            elements = [
+                {"type": "paragraph", "text": c.content}
+                for c in chunks
+            ]
+    elif real_path and ext == ".txt":
+        doc_format = "txt"
+        try:
+            with open(real_path, "r", encoding="utf-8") as f:
+                lines = [l.strip() for l in f.readlines() if l.strip()]
+            elements = [{"type": "paragraph", "text": l} for l in lines]
+        except Exception:
+            elements = [{"type": "paragraph", "text": c.content} for c in chunks]
+    else:
+        # Fallback to chunk database records
+        elements = [
+            {"type": "page", "page_number": c.page_number, "section": c.section, "text": c.content}
+            for c in chunks
+        ]
+
+    return {
+        "id": policy.id,
+        "title": policy.title,
+        "category": policy.category,
+        "format": doc_format,
+        "file_size": policy.file_size or (os.path.getsize(real_path) if real_path else 0),
+        "total_pages": total_pages,
+        "elements_count": len(elements),
+        "elements": elements,
+        "download_url": f"/api/v1/policies/{policy.id}/download",
+        "view_url": f"/api/v1/policies/{policy.id}/view"
+    }
+
+@router.get("/{policy_id}/view")
+async def view_policy(
+    policy_id: str,
+    user: User = Depends(get_policy_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Streams the policy file inline for viewing within browser iframes / embeds.
+    Supports both Bearer authorization header and ?token= query parameter.
+    """
+    stmt = select(Policy).where(
+        and_(
+            Policy.id == policy_id,
+            Policy.organization_id == user.organization_id
+        )
+    )
+    policy = (await db.execute(stmt)).scalars().first()
+    if not policy:
+        raise NotFoundException("Policy document not found")
+
+    real_path = resolve_safe_file_path(policy.file_path)
+    if real_path and os.path.exists(real_path):
+        ext = os.path.splitext(real_path)[1].lower()
+        media_type = detect_mime_type(ext)
+        clean_filename = f"{policy.title}{ext}"
+        return FileResponse(
+            path=real_path,
+            filename=clean_filename,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'inline; filename="{clean_filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition"
+            }
         )
 
-    ext = os.path.splitext(policy.file_path)[1].lower()
-    media_type = "application/pdf" if ext == ".pdf" else "application/octet-stream"
+    # Fallback: render text content from chunks inline
+    chunks_stmt = select(PolicyChunk).where(
+        PolicyChunk.policy_id == policy.id
+    ).order_by(PolicyChunk.page_number.asc(), PolicyChunk.id.asc())
+    chunks = (await db.execute(chunks_stmt)).scalars().all()
+    full_text = "\n\n".join([f"--- Page {c.page_number} ({c.section or 'General'}) ---\n{c.content}" for c in chunks])
+    return Response(
+        content=full_text.encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f'inline; filename="{policy.title}.txt"',
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+    )
 
-    return FileResponse(
-        path=policy.file_path,
-        filename=f"{policy.title}{ext}",
-        media_type=media_type
+@router.get("/{policy_id}/download")
+async def download_policy(
+    policy_id: str,
+    user: User = Depends(get_policy_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Downloads the original policy document with proper Content-Type and Content-Disposition.
+    Supports both Bearer authorization header and ?token= query parameter.
+    """
+    stmt = select(Policy).where(
+        and_(
+            Policy.id == policy_id,
+            Policy.organization_id == user.organization_id
+        )
+    )
+    policy = (await db.execute(stmt)).scalars().first()
+    if not policy:
+        raise NotFoundException("Policy document not found")
+
+    real_path = resolve_safe_file_path(policy.file_path)
+    if real_path and os.path.exists(real_path):
+        ext = os.path.splitext(real_path)[1].lower()
+        media_type = detect_mime_type(ext)
+        clean_filename = f"{policy.title}{ext}"
+        file_size = os.path.getsize(real_path)
+        return FileResponse(
+            path=real_path,
+            filename=clean_filename,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{clean_filename}"',
+                "Access-Control-Expose-Headers": "Content-Disposition, Content-Length",
+                "Content-Length": str(file_size)
+            }
+        )
+
+    # Fallback to generating text attachment from chunks
+    chunks_stmt = select(PolicyChunk).where(
+        PolicyChunk.policy_id == policy.id
+    ).order_by(PolicyChunk.page_number.asc(), PolicyChunk.id.asc())
+    chunks = (await db.execute(chunks_stmt)).scalars().all()
+    full_text = "\n\n".join([f"--- Page {c.page_number} ({c.section or 'Section'}) ---\n{c.content}" for c in chunks])
+    content_bytes = full_text.encode("utf-8")
+    return Response(
+        content=content_bytes,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{policy.title}.txt"',
+            "Access-Control-Expose-Headers": "Content-Disposition, Content-Length",
+            "Content-Length": str(len(content_bytes))
+        }
     )
 
 @router.delete("/{policy_id}")
@@ -195,9 +448,10 @@ async def delete_policy(
     if not pol:
         raise NotFoundException("Policy not found")
 
-    if pol.file_path and os.path.exists(pol.file_path):
+    real_path = resolve_safe_file_path(pol.file_path)
+    if real_path and os.path.exists(real_path):
         try:
-            os.remove(pol.file_path)
+            os.remove(real_path)
         except Exception:
             pass
 
