@@ -23,8 +23,10 @@ async def test_hr_onboarding_request_and_admin_approval():
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         # 1. HR creates onboarding request
-        unique_code = "EMP-TEST-99"
-        unique_email = "test.candidate99@attendai.com"
+        import uuid
+        rand_suffix = uuid.uuid4().hex[:6]
+        unique_code = f"EMP-{rand_suffix.upper()}"
+        unique_email = f"candidate.{rand_suffix}@attendai.com"
         create_res = await ac.post(
             "/api/v1/employees/request",
             json={
