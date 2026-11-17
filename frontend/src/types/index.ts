@@ -153,6 +153,7 @@ export interface ConversationMessage {
   tool_calls?: any[];
   tool_results?: any[];
   citations?: any[];
+  follow_ups?: string[];
   created_at: string;
 }
 

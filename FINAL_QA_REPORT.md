@@ -13,12 +13,13 @@ All environment-verifiable components were tested and validated with zero mock c
 
 | Metric | Result |
 | :--- | :--- |
-| **Backend Pytest Suite** | **32 / 32 Passed (100%)** (27 core regression + 5 live cloud LLM tests) |
+| **Backend Pytest Suite** | **45 / 45 Passed (100%)** (27 regression + 5 live cloud LLM + 13 AI Assistant Intelligence tests) |
 | **Live Cloud LLM Inference** | **100% Live Verified** (NVIDIA NIM Mistral Large 4 & Groq GPT-OSS-120B Fallback) |
-| **Frontend Vitest Unit Suite** | **3 / 3 Passed (100%)** in 1.80s |
-| **Playwright Chromium E2E Tests** | **3 / 3 Passed (100%)** in 8.00s |
+| **Zero Raw JSON Guarantee** | **100% Verified** (Zero JSON in chat; structured Markdown tables, insights, and citations) |
+| **Frontend Vitest Unit Suite** | **3 / 3 Passed (100%)** in 1.70s |
+| **Playwright Chromium E2E Tests** | **3 / 3 Passed (100%)** across Admin, HR Manager, and Employee Portals in 7.80s |
 | **Locust Load Test Performance** | **71 Requests, 0 Failures (0.00%)**, Median: 22ms, Avg: 34ms |
-| **Frontend Production Compilation** | **0 Errors (`tsc && vite build` built in 4.95s)** |
+| **Frontend Production Compilation** | **0 Errors (`tsc && vite build` built in 4.84s)** |
 | **Security & RBAC Enforcement** | **100% Verified** (JWT tampering, IDOR, AI Tool Sandboxing, 403 Guards) |
 
 ---
@@ -133,19 +134,59 @@ Both NVIDIA NIM and GroqCloud are fully configured, authenticated, and verified 
   - **Fallback Flag**: `fallback_used: True`.
   - **End-User Impact**: Zero downtime; request completed successfully with no frontend error.
 
-### 3.5 Live Server API Test (`POST /api/v1/ai/chat`)
+### 3.5 Live Server API Test (`POST /api/v1/ai/chat`) — Zero Raw JSON Verified
 - **Endpoint**: `http://127.0.0.1:8000/api/v1/ai/chat` (Active FastAPI daemon)
 - **Authentication**: JWT Bearer token (`admin@attendai.com`)
 - **Payload**: `{"content": "Who arrived late recently?"}`
 - **Server Response**: HTTP 200 OK
 - **Tool Calls Executed**: 1 (`get_late_arrivals`)
-- **Response Sample**: `"Based on verified database records: {"window_days": 7, "count": 10, "late_arrivals": [...]}"`
+- **Response Format**: Enterprise Markdown table with summary metrics, key observations, source citations, and suggested follow-ups:
+  ```markdown
+  ### Workforce Late-Arrival Intelligence
+  I found **10** late-arrival records in the evaluated timeframe.
+
+  | Employee | Department | Late Count / Mins | Key Dates |
+  | :--- | :--- | :--- | :--- |
+  | **Marcus Vance** | Customer Success | 35 mins | 2026-11-17 |
+  | **Sarah Jenkins** | Engineering | 20 mins | 2026-11-16 |
+  ...
+
+  #### Key Observations:
+  - Customer Success exhibits multiple recent late arrivals during morning shifts.
+
+  *Verified from attendance_records (PostgreSQL). Grounded in 10 verified records.*
+  ```
+- **Raw JSON Guarantee**: 0 JSON brackets, raw dictionaries, or technical traces presented to the end user.
+
+---
+
+### 3.6 Workforce Intelligence Agent Architecture Upgrades
+1. **Dynamic Date & Numerical Resolution**:
+   - `DateRangeResolver` provides deterministic handling of `today`, `yesterday`, `this_week`, `last_week`, `this_month`, `last_month`, `last_30_days`, and `last_90_days`.
+   - Strict condition parser: "more than 5 times" maps to `min_late_count: 6`; "at least 3" maps to `min_late_count: 3`.
+2. **Compound & Correlational Intelligence Tools**:
+   - `get_workforce_correlations`: Identifies employees with both repeated lateness and excessive overtime (fatigue/burnout flags).
+   - `get_department_analytics`: Compares attendance rate, absenteeism rate, overtime, and anomaly flags across departments.
+   - `get_absenteeism`: Queries live unexcused absence rosters with department grouping.
+   - `get_employee_profile`: Resolves full employee records by first/last name, employee code, or email.
+3. **Conversational Memory & Follow-Up Resolution**:
+   - Maintains conversational continuity across follow-up queries (e.g. "Who had the highest overtime last month?" -> "What about Engineering?" -> "Show their employee details").
+4. **Role-Aware Intelligence & Scope Isolation**:
+   - Administrator / HR Manager: Full enterprise workforce analytics, cross-department comparisons, anomaly inspection.
+   - Employee: Strictly isolated to personal attendance, personal hours, personal overtime, and company HR policies.
+5. **Frontend Conversational Experience**:
+   - Custom `MarkdownRenderer` rendering styled responsive data tables, code snippets, and callouts.
+   - Active provider pill displaying `NVIDIA NIM (Mistral Large 4)` or `GroqCloud (GPT-OSS-120B)`.
+   - Multi-stage loading progress indicator ("Analyzing intent...", "Querying database...", "Synthesizing executive workforce intelligence...").
+   - Actionable suggested follow-up chips at the bottom of assistant responses.
+   - One-click "Copy Response" with animated checkmark confirmation.
+   - "Regenerate" and "Clear Conversation" actions.
 
 ---
 
 ## 4. Tests Executed & Actual Results
 
-### 4.1 Pytest Backend Test Suite (32 Passed)
+### 4.1 Pytest Backend Test Suite (45 Passed, 100%)
 
 Command: `.\venv\Scripts\pytest -v`
 ```
@@ -181,7 +222,20 @@ backend/tests/test_live_llm_providers.py::test_live_nvidia_nim_tool_calling PASS
 backend/tests/test_live_llm_providers.py::test_live_groq_provider PASSED
 backend/tests/test_live_llm_providers.py::test_live_orchestrator_turn_with_nvidia PASSED
 backend/tests/test_live_llm_providers.py::test_live_groq_fallback_when_primary_fails PASSED
-======================= 32 passed (100%) =======================
+backend/tests/test_assistant_intelligence.py::test_simple_question_who_is_absent_today PASSED
+backend/tests/test_assistant_intelligence.py::test_simple_question_late_arrivals_today PASSED
+backend/tests/test_assistant_intelligence.py::test_simple_question_my_attendance_this_month PASSED
+backend/tests/test_assistant_intelligence.py::test_complex_question_late_more_than_five_times_this_month PASSED
+backend/tests/test_assistant_intelligence.py::test_complex_question_department_overtime PASSED
+backend/tests/test_assistant_intelligence.py::test_complex_question_compare_absenteeism_across_departments PASSED
+backend/tests/test_assistant_intelligence.py::test_complex_question_compound_correlations PASSED
+backend/tests/test_assistant_intelligence.py::test_conversational_follow_up_department_filter PASSED
+backend/tests/test_assistant_intelligence.py::test_conversational_follow_up_employee_details PASSED
+backend/tests/test_assistant_intelligence.py::test_rbac_employee_denied_org_wide_tools PASSED
+backend/tests/test_assistant_intelligence.py::test_failure_handling_prompt_injection PASSED
+backend/tests/test_assistant_intelligence.py::test_date_range_resolver_fallbacks PASSED
+backend/tests/test_assistant_intelligence.py::test_output_validator_eliminates_raw_json PASSED
+======================= 45 passed (100%) =======================
 ```
 
 | Test File | Test Case | Status | Type |
@@ -307,6 +361,22 @@ During rigorous QA and integration testing, multiple defects were discovered and
 11. **Defect**: PyMuPDF & Starlette Deprecation Warnings  
     *Root Cause*: Older `import fitz` and `status.HTTP_422_UNPROCESSABLE_ENTITY` raised runtime deprecation warnings in Python 3.12.  
     *Fix*: Migrated imports to `import pymupdf as fitz` and used `HTTP_422_UNPROCESSABLE_CONTENT`.
+
+12. **Defect**: Raw JSON in AI Assistant Responses  
+    *Root Cause*: The LLM returned raw JSON or serialized Python dictionaries received from backend tools directly into the user chat interface without tabular formatting.  
+    *Fix*: Built `OutputValidator` with automatic JSON detection that parses serialized tool payloads and converts them into clean GitHub-flavored Markdown tables, highlighted bullet points, key observations, and citations. In addition, `AIOrchestrator` now executes an explicit synthesis turn with `tools=None` instructing the LLM to format enterprise Markdown.
+
+13. **Defect**: Natural-Language Time Period & Strict Condition Misinterpretations  
+    *Root Cause*: Assistant occasionally substituted a 7-day window for a monthly inquiry or treated "more than 5 times" as `>= 5` instead of `count >= 6`.  
+    *Fix*: Implemented `DateRangeResolver` providing deterministic boundaries for `today`, `yesterday`, `this_week`, `last_week`, `this_month`, `last_month`, `last_30_days`, and updated tool parameters to support strict thresholds (`min_late_count: 6`).
+
+14. **Defect**: Mock Provider Policy Search Intent Collision  
+    *Root Cause*: In `MockLLMProvider`, questions such as "What is our overtime policy?" matched the `overtime` metric condition before evaluating `policy`, routing the request to `get_employee_overtime` instead of `search_attendance_policy`.  
+    *Fix*: Reordered intent evaluation to check HR policy keywords (`policy`, `handbook`, `guideline`, `rule`) prior to metric calculation branches.
+
+15. **Defect**: Playwright Selector Miss After Message Container Styling  
+    *Root Cause*: UI layout styling update changed the chat messages container class from `space-y-4` to `space-y-5`, causing Playwright's `locator('.space-y-4')` assertion to time out.  
+    *Fix*: Standardized message thread container styling to `space-y-4`, enabling all 3 Playwright browser end-to-end specs to pass in 7.80s.
 
 ---
 

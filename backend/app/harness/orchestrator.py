@@ -43,7 +43,7 @@ class AIOrchestrator:
         elif primary == "gemini" and settings.GEMINI_API_KEY:
             chain.append(GeminiProvider())
 
-        # Add fallback providers
+        # Add secondary fallback providers
         if settings.GROQ_API_KEY and not any(isinstance(p, GroqProvider) for p in chain):
             chain.append(GroqProvider())
         if settings.NVIDIA_API_KEY and not any(isinstance(p, NvidiaNIMProvider) for p in chain):
@@ -59,6 +59,10 @@ class AIOrchestrator:
         tools: Optional[List[Dict[str, Any]]] = None,
         override_provider: Optional[BaseLLMProvider] = None
     ) -> tuple[Dict[str, Any], BaseLLMProvider, bool]:
+        """
+        Executes LLM generation with automatic provider failover.
+        Returns (response_dict, active_provider, was_fallback_used).
+        """
         if override_provider:
             resp = await override_provider.generate_response(messages=messages, tools=tools)
             return resp, override_provider, False
@@ -88,7 +92,8 @@ class AIOrchestrator:
         conversation_history: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Executes a complete AI turn with security harness, tool resolution, and audit logging.
+        Executes a complete AI turn with intent understanding, multi-step tool reasoning,
+        conversational memory, strict RBAC, and executive presentation rendering.
         """
         # 1. Guardrails check
         is_safe, reason = HarnessGuardrails.inspect_input(user_message)
@@ -98,39 +103,100 @@ class AIOrchestrator:
                 "tool_calls": [],
                 "tool_results": [],
                 "citations": [],
+                "follow_ups": [],
                 "model": "attendai-guardrails",
-                "provider": "security_harness"
+                "provider": "security_harness",
+                "fallback_used": False,
+                "latency_ms": 1.0
             }
 
-        # 2. Build system instructions
+        # 2. Build enterprise system instructions with role-aware boundaries
         role_label = user.role.replace("_", " ").title()
+        
+        scope_instructions = ""
+        if user.role == "admin":
+            scope_instructions = (
+                "You have organization-wide administrative scope. You can analyze any department, "
+                "compare cross-department trends, highlight anomaly investigation records, and provide executive workforce insights."
+            )
+        elif user.role == "hr_manager":
+            scope_instructions = (
+                "You have HR Manager scope. You can analyze workforce attendance, overtime, absenteeism, "
+                "investigate anomalies, and review department-level patterns and policy compliance."
+            )
+        else:  # employee
+            emp_name = f"{employee.first_name} {employee.last_name}" if employee else user.email
+            scope_instructions = (
+                f"You have personal Employee scope for '{emp_name}'. "
+                "You can only access personal attendance records, personal hours, personal overtime, and general company HR policies. "
+                "Never access, reveal, or attempt to query private records of other colleagues."
+            )
+
         system_prompt = (
-            f"You are AttendAI Assistant, an enterprise workforce intelligence AI. "
-            f"The calling user is authenticated as '{user.email}' with role '{role_label}'. "
-            f"You have access to authorized backend tools to query verified workforce attendance records and HR policies. "
-            f"Always ground your answers in actual tool results. If information is not available, explicitly state so. "
-            f"Never invent records, metrics or policies."
+            f"You are AttendAI Assistant, an elite enterprise workforce intelligence analyst and AI advisor.\n"
+            f"Authenticated User: '{user.email}' | Role: '{role_label}'.\n"
+            f"Scope: {scope_instructions}\n\n"
+            "CRITICAL OPERATIONAL & PRESENTATION GUIDELINES:\n"
+            "1. CONVERSATIONAL MEMORY & REFERENCES: Maintain continuity across follow-up turns. "
+            "If the user asks 'What about Engineering?' or 'Who had the most overtime last month?' followed by 'Show their details', "
+            "inherit the previous time period, metric, and target entity from the conversation history.\n"
+            "2. EXACT QUERY INTERPRETATION: Respect exact numerical and date conditions: "
+            "'more than 5' means count >= 6; 'at least 3' means count >= 3. Never substitute a 7-day query for a monthly query.\n"
+            "3. MULTI-STEP REASONING: When a query requires multiple tools (e.g. comparing departments or finding compound patterns), "
+            "invoke the necessary approved tools across steps, combine the results, and explain the conclusions.\n"
+            "4. NEVER OUTPUT RAW JSON: Under NO circumstances should you output raw JSON strings, Python dictionaries, curly braces "
+            "with database field names, or technical execution traces to the user.\n"
+            "5. POLISHED ENTERPRISE FORMATTING:\n"
+            "   - Synthesize all data into clean Markdown tables with bold column headers.\n"
+            "   - Include highlighted KPI metrics, bulleted summaries, and bold percentages.\n"
+            "   - Include an '### AI Insight' section highlighting key trends, anomalies, or root causes strictly grounded in evidence.\n"
+            "   - Include actionable HR / management recommendations where appropriate.\n"
+            "   - Ground all factual statements in verified tool outputs. Never fabricate employees, dates, or metrics."
         )
 
         messages = [{"role": "system", "content": system_prompt}]
-        for hist in conversation_history[-6:]:  # Keep recent context
+        
+        # Incorporate recent conversation context (last 8 messages)
+        for hist in conversation_history[-8:]:
             messages.append({"role": hist["role"], "content": hist["content"]})
         messages.append({"role": "user", "content": user_message})
 
-        # 3. Filter permitted tools
+        # Filter permitted tools for the user role
         allowed_tools = HarnessPermissions.filter_tools_for_user(user.role, TOOL_DEFINITIONS)
 
-        # 4. First LLM call with resilient multi-provider failover
-        first_resp, active_provider, fallback_used = await self.generate_with_fallback(
-            messages=messages,
-            tools=allowed_tools if allowed_tools else None
-        )
+        # 3. Multi-Step Tool Reasoning Loop (Max 3 turns)
+        MAX_TOOL_LOOPS = 3
+        current_loop = 0
+        all_tool_calls = []
+        all_tool_results = []
+        active_provider = None
+        fallback_used = False
+        final_content = ""
+        total_latency = 0.0
 
-        tool_calls = first_resp.get("tool_calls")
-        tool_results = []
+        while current_loop < MAX_TOOL_LOOPS:
+            current_loop += 1
+            
+            resp, prov, fb = await self.generate_with_fallback(
+                messages=messages,
+                tools=allowed_tools if allowed_tools else None
+            )
+            active_provider = prov
+            if fb:
+                fallback_used = True
+            total_latency += resp.get("latency_ms", 0)
 
-        # 5. Execute tools if called
-        if tool_calls:
+            tool_calls = resp.get("tool_calls")
+            
+            if not tool_calls:
+                # No more tools called; model completed response
+                final_content = resp.get("content") or ""
+                break
+                
+            all_tool_calls.extend(tool_calls)
+            
+            # Execute all tool calls in this batch
+            batch_tool_results = []
             for tc in tool_calls:
                 func_name = tc["function"]["name"]
                 raw_args = tc["function"]["arguments"]
@@ -162,50 +228,66 @@ class AIOrchestrator:
                 )
                 db.add(audit)
 
-                tool_results.append({
+                tool_item = {
                     "tool_call_id": tc.get("id"),
                     "tool_name": func_name,
                     "output": res
-                })
+                }
+                all_tool_results.append(tool_item)
+                batch_tool_results.append(tool_item)
 
             await db.commit()
 
-            # Second turn to generate synthesized response
+            # Append assistant message with tool_calls and tool results
             messages.append({
                 "role": "assistant",
-                "content": first_resp.get("content") or "",
+                "content": resp.get("content") or "",
                 "tool_calls": tool_calls
             })
-            for tr in tool_results:
+            for tr in batch_tool_results:
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tr["tool_call_id"],
                     "content": json.dumps(tr["output"])
                 })
 
-            try:
-                second_resp = await active_provider.generate_response(messages=messages)
-            except Exception as e:
-                logger.warning(f"Second turn with {type(active_provider).__name__} failed: {e}. Falling back.")
-                second_resp, _, _ = await self.generate_with_fallback(messages=messages)
+            # Prompt model to synthesize the verified tool results into a polished enterprise markdown response
+            messages.append({
+                "role": "user",
+                "content": "Please synthesize the above verified database records into a polished enterprise markdown response with clean markdown tables, bullet points, key observations, and actionable insights. Do not output raw JSON."
+            })
+            final_resp, prov, fb = await self.generate_with_fallback(messages=messages, tools=None)
+            if fb:
+                fallback_used = True
+            final_content = final_resp.get("content") or ""
+            total_latency += final_resp.get("latency_ms", 0)
+            break
 
-            final_content = second_resp.get("content") or first_resp.get("content") or ""
-        else:
-            final_content = first_resp.get("content") or ""
+        # If LLM returned empty content after tools, synthesize via OutputValidator
+        if not final_content and all_tool_results:
+            final_content = OutputValidator._synthesize_tool_results_to_markdown(all_tool_results)
 
-        # 6. Sanitize and validate
+        # 4. Sanitize, Validate, and Structure Presentation
         final_content = HarnessGuardrails.sanitize_output(final_content)
-        validated = OutputValidator.validate_and_format(final_content, tool_results, user.role)
+        validated = OutputValidator.validate_and_format(final_content, all_tool_results, user.role)
+
+        provider_tag = "nvidia" if isinstance(active_provider, NvidiaNIMProvider) else (
+            "groq" if isinstance(active_provider, GroqProvider) else (
+                "gemini" if isinstance(active_provider, GeminiProvider) else "mock"
+            )
+        )
+        model_tag = getattr(active_provider, "model", "default")
 
         return {
             "content": validated["validated_text"],
-            "tool_calls": tool_calls,
-            "tool_results": tool_results,
+            "tool_calls": all_tool_calls,
+            "tool_results": all_tool_results,
             "citations": validated["citations"],
-            "model": first_resp.get("model", "default"),
-            "provider": first_resp.get("provider", "default"),
+            "follow_ups": validated["follow_ups"],
+            "model": model_tag,
+            "provider": provider_tag,
             "fallback_used": fallback_used,
-            "latency_ms": first_resp.get("latency_ms", 0)
+            "latency_ms": round(total_latency, 2)
         }
 
 ai_orchestrator = AIOrchestrator()

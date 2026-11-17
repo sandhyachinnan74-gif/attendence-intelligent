@@ -159,10 +159,12 @@ async def chat(
             "tool_calls": asst_msg.tool_calls,
             "tool_results": asst_msg.tool_results,
             "citations": asst_msg.citations,
+            "follow_ups": result.get("follow_ups", []),
             "created_at": asst_msg.created_at
         },
         "model": result.get("model"),
-        "provider": result.get("provider")
+        "provider": result.get("provider"),
+        "fallback_used": result.get("fallback_used", False)
     }
 
 @router.delete("/conversations/{conversation_id}")
